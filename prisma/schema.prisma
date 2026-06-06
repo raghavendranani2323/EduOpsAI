@@ -615,9 +615,23 @@ model Notice {
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 
-  institution Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  institution Institution  @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  reads       NoticeRead[]
 
   @@map("notices")
+}
+
+model NoticeRead {
+  id        String   @id @default(cuid())
+  noticeId  String
+  studentId String
+  readAt    DateTime @default(now())
+
+  notice Notice @relation(fields: [noticeId], references: [id], onDelete: Cascade)
+
+  @@unique([noticeId, studentId])
+  @@index([studentId])
+  @@map("notice_reads")
 }
 
 enum NoticeAudience {

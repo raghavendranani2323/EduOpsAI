@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
-import { GraduationCap, CalendarCheck, Wallet, BookOpen, Megaphone } from "lucide-react";
+import Link from "next/link";
+import { GraduationCap, CalendarCheck, Wallet, BookOpen, Megaphone, ChevronRight } from "lucide-react";
 import { prismaAdmin } from "@/lib/prisma/admin";
 import { formatINR } from "@/lib/format/currency";
 import { formatDate } from "@/lib/format/date";
@@ -166,10 +167,18 @@ export default async function ParentPortalPage({ params }: { params: Promise<{ t
           ) : (
             <ul className="space-y-2">
               {notices.map(n => (
-                <li key={n.id} className="border rounded-lg p-2.5">
-                  <p className="text-sm font-medium">{n.title}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5 line-clamp-3 whitespace-pre-wrap">{n.body}</p>
-                  <p className="text-xs text-muted-foreground mt-1">{formatDate(n.createdAt.toISOString().split("T")[0])}</p>
+                <li key={n.id}>
+                  <Link
+                    href={`/p/${token}/notice/${n.id}`}
+                    className="flex items-center gap-2 border rounded-lg p-2.5 hover:bg-muted/40"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium">{n.title}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2 whitespace-pre-wrap">{n.body}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{formatDate(n.createdAt.toISOString().split("T")[0])}</p>
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                  </Link>
                 </li>
               ))}
             </ul>

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, X, Pencil, Trash2, Bell, Pin } from "lucide-react";
+import { Plus, X, Pencil, Trash2, Bell, Pin, Eye } from "lucide-react";
 
 type Audience = "ALL" | "TEACHERS" | "PARENTS" | "CLASS";
 
@@ -10,6 +10,7 @@ interface Notice {
   id: string; authorId: string; title: string; body: string;
   audience: Audience; classId: string | null; pinned: boolean;
   publishedAt: string; expiresAt: string | null;
+  readCount?: number; targetCount?: number;
 }
 interface Props {
   notices: Notice[];
@@ -110,6 +111,14 @@ export function NoticesClient({ notices: initial, classes }: Props) {
                     {audienceLabel[n.audience]}{cls ? ` · ${cls.name}` : ""} · {date}
                     {n.expiresAt ? ` · Expires ${new Date(n.expiresAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}` : ""}
                   </p>
+                  {n.audience !== "TEACHERS" && typeof n.readCount === "number" && (
+                    <p className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
+                      <Eye className="h-3 w-3" />
+                      <span>
+                        {n.readCount} of {n.targetCount ?? 0} parents read
+                      </span>
+                    </p>
+                  )}
                 </div>
                 <div className="flex gap-1 shrink-0">
                   <button onClick={() => togglePin(n)} title={n.pinned ? "Unpin" : "Pin"} className="p-2 rounded-lg hover:bg-muted min-h-[44px] min-w-[44px] flex items-center justify-center">
