@@ -8,6 +8,7 @@ import { formatINR } from "@/lib/format/currency";
 import { formatDate } from "@/lib/format/date";
 import { formatPhone } from "@/lib/format/phone";
 import { StudentDetailClient } from "./student-detail-client";
+import { SharePortalButton } from "./share-portal-button";
 
 export default async function StudentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -59,6 +60,8 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
           {student.status.toLowerCase()}
         </span>
       </div>
+
+      <SharePortalButton studentId={student.id} studentName={student.fullName} />
 
       {/* Tags */}
       {student.studentTags.length > 0 && (

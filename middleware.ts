@@ -29,7 +29,7 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
   const isAuthRoute = pathname.startsWith("/login") || pathname.startsWith("/signup") || pathname.startsWith("/accept-invite");
-  const isPublicRoute = isAuthRoute || pathname.startsWith("/api/razorpay") || pathname.startsWith("/api/auth") || pathname.startsWith("/onboarding");
+  const isPublicRoute = isAuthRoute || pathname.startsWith("/api/razorpay") || pathname.startsWith("/api/auth") || pathname.startsWith("/onboarding") || pathname.startsWith("/p/") || pathname.startsWith("/api/p/");
 
   if (!user && !isPublicRoute) {
     const url = request.nextUrl.clone();
