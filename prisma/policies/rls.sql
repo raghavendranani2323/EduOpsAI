@@ -145,6 +145,52 @@ CREATE POLICY tmpl_upd ON message_templates FOR UPDATE USING (has_role("institut
 CREATE POLICY msg_sel ON messages FOR SELECT USING (is_member("institutionId"));
 CREATE POLICY msg_ins ON messages FOR INSERT WITH CHECK (has_role("institutionId", 'OWNER', 'ADMIN'));
 
+-- ── PHASE 2 — subjects / exams / exam_results ──────────────
+ALTER TABLE subjects     ENABLE ROW LEVEL SECURITY;
+ALTER TABLE exams        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE exam_results ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY subj_sel ON subjects FOR SELECT USING (is_member("institutionId"));
+CREATE POLICY subj_ins ON subjects FOR INSERT WITH CHECK (has_role("institutionId", 'OWNER', 'ADMIN', 'TEACHER'));
+CREATE POLICY subj_upd ON subjects FOR UPDATE USING (has_role("institutionId", 'OWNER', 'ADMIN', 'TEACHER')) WITH CHECK (has_role("institutionId", 'OWNER', 'ADMIN', 'TEACHER'));
+CREATE POLICY subj_del ON subjects FOR DELETE USING (has_role("institutionId", 'OWNER', 'ADMIN'));
+
+CREATE POLICY exam_sel ON exams FOR SELECT USING (is_member("institutionId"));
+CREATE POLICY exam_ins ON exams FOR INSERT WITH CHECK (has_role("institutionId", 'OWNER', 'ADMIN', 'TEACHER'));
+CREATE POLICY exam_upd ON exams FOR UPDATE USING (has_role("institutionId", 'OWNER', 'ADMIN', 'TEACHER')) WITH CHECK (has_role("institutionId", 'OWNER', 'ADMIN', 'TEACHER'));
+CREATE POLICY exam_del ON exams FOR DELETE USING (has_role("institutionId", 'OWNER', 'ADMIN'));
+
+CREATE POLICY exres_sel ON exam_results FOR SELECT USING (is_member("institutionId"));
+CREATE POLICY exres_ins ON exam_results FOR INSERT WITH CHECK (has_role("institutionId", 'OWNER', 'ADMIN', 'TEACHER'));
+CREATE POLICY exres_upd ON exam_results FOR UPDATE USING (has_role("institutionId", 'OWNER', 'ADMIN', 'TEACHER')) WITH CHECK (has_role("institutionId", 'OWNER', 'ADMIN', 'TEACHER'));
+
+-- ── PHASE 2 — timetable ─────────────────────────────────────
+ALTER TABLE timetable_slots ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tt_sel ON timetable_slots FOR SELECT USING (is_member("institutionId"));
+CREATE POLICY tt_ins ON timetable_slots FOR INSERT WITH CHECK (has_role("institutionId", 'OWNER', 'ADMIN'));
+CREATE POLICY tt_upd ON timetable_slots FOR UPDATE USING (has_role("institutionId", 'OWNER', 'ADMIN')) WITH CHECK (has_role("institutionId", 'OWNER', 'ADMIN'));
+CREATE POLICY tt_del ON timetable_slots FOR DELETE USING (has_role("institutionId", 'OWNER', 'ADMIN'));
+
+-- ── PHASE 2 — homework ──────────────────────────────────────
+ALTER TABLE homework ENABLE ROW LEVEL SECURITY;
+CREATE POLICY hw_sel ON homework FOR SELECT USING (is_member("institutionId"));
+CREATE POLICY hw_ins ON homework FOR INSERT WITH CHECK (has_role("institutionId", 'OWNER', 'ADMIN', 'TEACHER'));
+CREATE POLICY hw_upd ON homework FOR UPDATE USING (has_role("institutionId", 'OWNER', 'ADMIN', 'TEACHER')) WITH CHECK (has_role("institutionId", 'OWNER', 'ADMIN', 'TEACHER'));
+CREATE POLICY hw_del ON homework FOR DELETE USING (has_role("institutionId", 'OWNER', 'ADMIN', 'TEACHER'));
+
+-- ── PHASE 2 — notices ───────────────────────────────────────
+ALTER TABLE notices ENABLE ROW LEVEL SECURITY;
+CREATE POLICY nt_sel ON notices FOR SELECT USING (is_member("institutionId"));
+CREATE POLICY nt_ins ON notices FOR INSERT WITH CHECK (has_role("institutionId", 'OWNER', 'ADMIN', 'TEACHER'));
+CREATE POLICY nt_upd ON notices FOR UPDATE USING (has_role("institutionId", 'OWNER', 'ADMIN', 'TEACHER')) WITH CHECK (has_role("institutionId", 'OWNER', 'ADMIN', 'TEACHER'));
+CREATE POLICY nt_del ON notices FOR DELETE USING (has_role("institutionId", 'OWNER', 'ADMIN'));
+
+-- ── PHASE 2 — leave_requests ────────────────────────────────
+ALTER TABLE leave_requests ENABLE ROW LEVEL SECURITY;
+CREATE POLICY lv_sel ON leave_requests FOR SELECT USING (is_member("institutionId"));
+CREATE POLICY lv_ins ON leave_requests FOR INSERT WITH CHECK (is_member("institutionId"));
+CREATE POLICY lv_upd ON leave_requests FOR UPDATE USING (has_role("institutionId", 'OWNER', 'ADMIN')) WITH CHECK (has_role("institutionId", 'OWNER', 'ADMIN'));
+
 -- ── profiles (no institution scope — users see their own) ───
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 CREATE POLICY prof_select ON profiles FOR SELECT USING (id = current_user_id() OR EXISTS (
