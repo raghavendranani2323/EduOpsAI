@@ -4,6 +4,11 @@ import { requireInstitution } from "@/lib/tenant/current";
 import { withRls } from "@/lib/prisma/rls";
 import { getTerminology } from "@/lib/i18n/terminology";
 import { todayIST, formatDateLong } from "@/lib/format/date";
+type ClassWithAttendance = {
+  id: string; name: string; section: string | null;
+  _count: { students: number };
+  sessions: { id: string; _count: { records: number } }[];
+};
 
 export default async function AttendancePage() {
   const { user, institution } = await requireInstitution();
@@ -37,7 +42,7 @@ export default async function AttendancePage() {
       </div>
 
       <div className="space-y-2">
-        {classes.map((cls) => {
+        {classes.map((cls: ClassWithAttendance) => {
           const session  = cls.sessions[0];
           const marked   = !!session;
           const count    = session?._count.records ?? 0;
