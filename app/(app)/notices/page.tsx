@@ -1,6 +1,7 @@
 import { requireInstitution } from "@/lib/tenant/current";
 import { withRls } from "@/lib/prisma/rls";
 import { NoticesClient } from "./notices-client";
+import type { Notice } from "@prisma/client";
 
 export default async function NoticesPage() {
   const { user, institution } = await requireInstitution();
@@ -19,7 +20,7 @@ export default async function NoticesPage() {
       }),
     ]);
     return {
-      notices: notices.map(n => ({
+      notices: notices.map((n: Notice) => ({
         id: n.id, authorId: n.authorId, title: n.title, body: n.body,
         audience: n.audience, classId: n.classId, pinned: n.pinned,
         publishedAt: n.publishedAt.toISOString(),

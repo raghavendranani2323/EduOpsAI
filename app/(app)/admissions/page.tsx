@@ -2,6 +2,7 @@ import { requireInstitution } from "@/lib/tenant/current";
 import { withRls } from "@/lib/prisma/rls";
 import { AdmissionsClient } from "./admissions-client";
 import { todayIST } from "@/lib/format/date";
+import type { Lead } from "@prisma/client";
 
 export default async function AdmissionsPage() {
   const { user, institution } = await requireInstitution();
@@ -20,7 +21,7 @@ export default async function AdmissionsPage() {
       }),
     ]);
 
-    const dueTodayCount = leads.filter((l: { nextFollowupAt: Date | null; stage: string }) =>
+    const dueTodayCount = leads.filter((l: Lead) =>
       l.nextFollowupAt &&
       l.stage !== "CONVERTED" &&
       l.stage !== "LOST" &&
@@ -28,7 +29,7 @@ export default async function AdmissionsPage() {
     ).length;
 
     return {
-      leads: leads.map(l => ({
+      leads: leads.map((l: Lead) => ({
         id:               l.id,
         studentName:      l.studentName,
         guardianName:     l.guardianName,

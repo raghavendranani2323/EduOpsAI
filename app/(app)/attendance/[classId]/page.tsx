@@ -7,6 +7,12 @@ import { getTerminology } from "@/lib/i18n/terminology";
 import { todayIST, formatDateLong } from "@/lib/format/date";
 import { AttendanceSheet } from "./attendance-sheet";
 import { AttendanceHistory } from "./attendance-history";
+import { Prisma } from "@prisma/client";
+import type { AttendanceRecord } from "@prisma/client";
+
+type SessionWithRecords = Prisma.AttendanceSessionGetPayload<{
+  include: { records: { select: { status: true } } };
+}>;
 
 export default async function AttendanceClassPage({
   params,
@@ -58,7 +64,7 @@ export default async function AttendanceClassPage({
         })
       : [];
 
-    const history = historySessions.map(s => ({
+    const history = historySessions.map((s: SessionWithRecords) => ({
       date:    (s.sessionDate as Date).toISOString().split("T")[0],
       present: s.records.filter(r => r.status === "PRESENT").length,
       absent:  s.records.filter(r => r.status === "ABSENT").length,
@@ -119,7 +125,7 @@ export default async function AttendanceClassPage({
             classId={classId}
             date={date}
             students={students}
-            existingRecords={existingRecords.map(r => ({ studentId: r.studentId, status: r.status, note: r.note ?? undefined }))}
+            existingRecords={existingRecords.map((r: AttendanceRecord) => ({ studentId: r.studentId, status: r.status, note: r.note ?? undefined }))}
             isEdit={!!existingSession}
             terminology={t}
           />

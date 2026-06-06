@@ -1,6 +1,12 @@
 import { requireInstitution } from "@/lib/tenant/current";
 import { withRls } from "@/lib/prisma/rls";
 import { CommunicationsClient } from "./communications-client";
+import { Prisma } from "@prisma/client";
+import type { MessageTemplate } from "@prisma/client";
+
+type MessageWithTemplate = Prisma.MessageGetPayload<{
+  include: { template: { select: { kind: true } } };
+}>;
 
 export default async function CommunicationsPage() {
   const { user, institution } = await requireInstitution();
@@ -25,13 +31,13 @@ export default async function CommunicationsPage() {
     ]);
 
     return {
-      templates: templates.map(t => ({
+      templates: templates.map((t: MessageTemplate) => ({
         id:       t.id,
         kind:     t.kind as string,
         language: t.language,
         body:     t.body,
       })),
-      messages: messages.map(m => ({
+      messages: messages.map((m: MessageWithTemplate) => ({
         id:             m.id,
         recipientPhone: m.recipientPhone,
         channel:        m.channel as string,

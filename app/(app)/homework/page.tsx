@@ -1,6 +1,7 @@
 import { requireInstitution } from "@/lib/tenant/current";
 import { withRls } from "@/lib/prisma/rls";
 import { HomeworkClient } from "./homework-client";
+import type { Homework } from "@prisma/client";
 
 export default async function HomeworkPage() {
   const { user, institution } = await requireInstitution();
@@ -24,7 +25,7 @@ export default async function HomeworkPage() {
       }),
     ]);
     return {
-      homework: homework.map(h => ({
+      homework: homework.map((h: Homework) => ({
         id: h.id, classId: h.classId, subjectId: h.subjectId, teacherId: h.teacherId,
         title: h.title, description: h.description,
         dueDate: h.dueDate?.toISOString().split("T")[0] ?? null,

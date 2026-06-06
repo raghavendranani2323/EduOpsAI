@@ -1,6 +1,11 @@
 import { requireInstitution } from "@/lib/tenant/current";
 import { withRls } from "@/lib/prisma/rls";
 import { ExamsClient } from "./exams-client";
+import { Prisma } from "@prisma/client";
+
+type ExamRow = Prisma.ExamGetPayload<{
+  include: { class: { select: { name: true } }; _count: { select: { results: true } } };
+}>;
 
 export default async function ExamsPage() {
   const { user, institution } = await requireInstitution();
@@ -25,7 +30,7 @@ export default async function ExamsPage() {
     ]);
 
     return {
-      exams: exams.map(e => ({
+      exams: exams.map((e: ExamRow) => ({
         id:           e.id,
         name:         e.name,
         classId:      e.classId,

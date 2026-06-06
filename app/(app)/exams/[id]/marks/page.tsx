@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { requireInstitution } from "@/lib/tenant/current";
 import { withRls } from "@/lib/prisma/rls";
 import { MarksClient } from "./marks-client";
+import type { Subject, Student, ExamResult } from "@prisma/client";
 
 export default async function MarksPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: examId } = await params;
@@ -35,9 +36,9 @@ export default async function MarksPage({ params }: { params: Promise<{ id: stri
         passingMarks: exam.passingMarks,
         examDate:     exam.examDate?.toISOString().split("T")[0] ?? null,
       },
-      subjects: subjects.map(s => ({ id: s.id, name: s.name })),
-      students: students.map(s => ({ id: s.id, fullName: s.fullName, admissionNo: s.admissionNo })),
-      existingResults: existingResults.map(r => ({
+      subjects: subjects.map((s: Subject) => ({ id: s.id, name: s.name })),
+      students: students.map((s: Student) => ({ id: s.id, fullName: s.fullName, admissionNo: s.admissionNo })),
+      existingResults: existingResults.map((r: ExamResult) => ({
         examId:        r.examId,
         studentId:     r.studentId,
         subjectId:     r.subjectId,
