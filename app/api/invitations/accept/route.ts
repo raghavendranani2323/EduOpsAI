@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { prisma } from "@/lib/prisma/client";
+import { prismaAdmin as prisma } from "@/lib/prisma/admin";
 
 const schema = z.object({ token: z.string().min(1) });
 

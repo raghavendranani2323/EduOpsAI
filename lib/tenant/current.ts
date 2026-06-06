@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { prisma } from "@/lib/prisma/client";
+import { prismaAdmin } from "@/lib/prisma/admin";
 import { requireUser } from "@/lib/auth/session";
 
 const INSTITUTION_COOKIE = "eduops_institution_id";
@@ -13,16 +13,17 @@ export async function requireInstitution() {
   const user = await requireUser();
   const institutionId = await getCurrentInstitutionId();
 
+  // Membership resolution always scoped to user.id from Supabase session — admin
+  // client is only used because the request hasn't established RLS claims yet.
   if (institutionId) {
-    const membership = await prisma.membership.findFirst({
+    const membership = await prismaAdmin.membership.findFirst({
       where: { userId: user.id, institutionId, revokedAt: null },
       include: { institution: true },
     });
     if (membership) return { user, membership, institution: membership.institution };
   }
 
-  // Fall back to first active membership
-  const first = await prisma.membership.findFirst({
+  const first = await prismaAdmin.membership.findFirst({
     where: { userId: user.id, revokedAt: null },
     include: { institution: true },
     orderBy: { createdAt: "asc" },

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireInstitution } from "@/lib/tenant/current";
-import { prisma } from "@/lib/prisma/client";
+import { withRls } from "@/lib/prisma/rls";
 
 const schema = z.object({
   email: z.string().email(),
@@ -22,34 +22,33 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: parsed.error.issues[0]?.message }, { status: 400 });
   }
 
-  // Block self-invite + duplicate-email check
-  const existingMember = await prisma.membership.findFirst({
-    where: {
-      institutionId: institution.id,
-      user: { id: user.id },
-    },
+  const invitation = await withRls(user.id, async (tx) => {
+    const existingInvite = await tx.invitation.findFirst({
+      where: {
+        institutionId: institution.id,
+        email: parsed.data.email,
+        acceptedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+    });
+    if (existingInvite) throw new Error("PENDING");
+
+    return tx.invitation.create({
+      data: {
+        institutionId: institution.id,
+        email: parsed.data.email,
+        role: parsed.data.role,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      },
+    });
+  }).catch((e: Error) => {
+    if (e.message === "PENDING") return null;
+    throw e;
   });
 
-  const existingInvite = await prisma.invitation.findFirst({
-    where: {
-      institutionId: institution.id,
-      email: parsed.data.email,
-      acceptedAt: null,
-      expiresAt: { gt: new Date() },
-    },
-  });
-  if (existingInvite) {
+  if (!invitation) {
     return NextResponse.json({ ok: false, error: "An invitation for this email is already pending" }, { status: 409 });
   }
-
-  const invitation = await prisma.invitation.create({
-    data: {
-      institutionId: institution.id,
-      email: parsed.data.email,
-      role: parsed.data.role,
-      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
-    },
-  });
 
   const inviteUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/accept-invite/${invitation.token}`;
 
@@ -62,10 +61,12 @@ export async function POST(req: NextRequest) {
 
 // GET /api/invitations — list pending invitations
 export async function GET() {
-  const { institution } = await requireInstitution();
-  const invitations = await prisma.invitation.findMany({
-    where: { institutionId: institution.id, acceptedAt: null },
-    orderBy: { createdAt: "desc" },
-  });
+  const { user, institution } = await requireInstitution();
+  const invitations = await withRls(user.id, (tx) =>
+    tx.invitation.findMany({
+      where: { institutionId: institution.id, acceptedAt: null },
+      orderBy: { createdAt: "desc" },
+    })
+  );
   return NextResponse.json({ ok: true, invitations });
 }

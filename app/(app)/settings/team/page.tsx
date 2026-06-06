@@ -1,5 +1,5 @@
 import { requireInstitution } from "@/lib/tenant/current";
-import { prisma } from "@/lib/prisma/client";
+import { withRls } from "@/lib/prisma/rls";
 import { TeamPageClient } from "./team-client";
 import { Prisma } from "@prisma/client";
 import type { Invitation } from "@prisma/client";
@@ -9,19 +9,21 @@ type MemberWithUser = Prisma.MembershipGetPayload<{
 }>;
 
 export default async function TeamPage() {
-  const { institution, membership } = await requireInstitution();
+  const { user, institution, membership } = await requireInstitution();
 
-  const [members, invitations] = await Promise.all([
-    prisma.membership.findMany({
-      where: { institutionId: institution.id, revokedAt: null },
-      include: { user: { select: { id: true, fullName: true } } },
-      orderBy: { createdAt: "asc" },
-    }),
-    prisma.invitation.findMany({
-      where: { institutionId: institution.id, acceptedAt: null },
-      orderBy: { createdAt: "desc" },
-    }),
-  ]);
+  const [members, invitations] = await withRls(user.id, (tx) =>
+    Promise.all([
+      tx.membership.findMany({
+        where: { institutionId: institution.id, revokedAt: null },
+        include: { user: { select: { id: true, fullName: true } } },
+        orderBy: { createdAt: "asc" },
+      }),
+      tx.invitation.findMany({
+        where: { institutionId: institution.id, acceptedAt: null },
+        orderBy: { createdAt: "desc" },
+      }),
+    ])
+  );
 
   const canInvite = ["OWNER", "ADMIN"].includes(membership.role);
 

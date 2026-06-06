@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { verifyWebhookSignature } from "@/lib/razorpay/client";
-import { prisma } from "@/lib/prisma/client";
+import { prismaAdmin as prisma } from "@/lib/prisma/admin";
 
 export async function POST(req: Request) {
   const rawBody  = await req.text();

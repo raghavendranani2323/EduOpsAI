@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { prisma } from "@/lib/prisma/client";
+import { prismaAdmin } from "@/lib/prisma/admin";
 import type { Role } from "@prisma/client";
 
 export async function getUser() {
@@ -17,7 +17,7 @@ export async function requireUser() {
 
 export async function requireRole(institutionId: string, ...roles: Role[]) {
   const user = await requireUser();
-  const membership = await prisma.membership.findFirst({
+  const membership = await prismaAdmin.membership.findFirst({
     where: {
       userId: user.id,
       institutionId,
@@ -30,7 +30,7 @@ export async function requireRole(institutionId: string, ...roles: Role[]) {
 }
 
 export async function getUserMemberships(userId: string) {
-  return prisma.membership.findMany({
+  return prismaAdmin.membership.findMany({
     where: { userId, revokedAt: null },
     include: { institution: true },
     orderBy: { createdAt: "asc" },
