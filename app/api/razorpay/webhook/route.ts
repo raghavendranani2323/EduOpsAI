@@ -36,6 +36,14 @@ export async function POST(req: Request) {
   const invoice = await prisma.invoice.findUnique({ where: { id: invoiceId } });
   if (!invoice) return NextResponse.json({ ok: false, error: "Invoice not found" }, { status: 404 });
 
+  // Attribute system-recorded payment to the institution OWNER (FK to profiles requires a real user)
+  const ownerMembership = await prisma.membership.findFirst({
+    where: { institutionId: invoice.institutionId, role: "OWNER", revokedAt: null },
+    orderBy: { createdAt: "asc" },
+    select: { userId: true },
+  });
+  if (!ownerMembership) return NextResponse.json({ ok: false, error: "Owner not found for institution" }, { status: 500 });
+
   await prisma.$transaction(async (tx) => {
     await tx.payment.create({
       data: {
@@ -44,7 +52,7 @@ export async function POST(req: Request) {
         amount,
         mode:                     "ONLINE",
         paidAt:                   new Date(),
-        recordedBy:               invoice.institutionId, // system
+        recordedBy:               ownerMembership.userId,
         razorpayOrderId:          orderId,
         razorpayPaymentId:        paymentId,
         razorpaySignatureVerified: true,

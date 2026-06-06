@@ -58,7 +58,9 @@ export function verifyRazorpaySignature(params: {
 
 export function verifyWebhookSignature(rawBody: string, signature: string): boolean {
   const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
-  if (!secret) return false;
+  if (!secret) {
+    throw new Error("RAZORPAY_WEBHOOK_SECRET is not set — refusing to process webhooks");
+  }
   const crypto = require("crypto") as typeof import("crypto");
   const expected = crypto.createHmac("sha256", secret).update(rawBody).digest("hex");
   return expected === signature;

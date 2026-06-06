@@ -48,7 +48,7 @@ export default async function DashboardPage() {
             sessions: {
               some: {
                 sessionDate: todayDt,
-                sessionLabel: "MORNING",
+                sessionLabel: "morning",
               },
             },
           },
@@ -98,11 +98,11 @@ export default async function DashboardPage() {
       }),
       // fee collection last 6 months — one number per month
       isTeacher ? Promise.resolve([]) : tx.$queryRaw<{ month: string; total: bigint }[]>`
-        SELECT to_char(date_trunc('month', paid_at AT TIME ZONE 'Asia/Kolkata'), 'YYYY-MM') AS month,
+        SELECT to_char(date_trunc('month', "paidAt" AT TIME ZONE 'Asia/Kolkata'), 'YYYY-MM') AS month,
                SUM(amount) AS total
         FROM payments
-        WHERE institution_id = ${institution.id}
-          AND paid_at >= ${new Date(y, m - 7, 1)}
+        WHERE "institutionId" = ${institution.id}
+          AND "paidAt" >= ${new Date(y, m - 7, 1)}
         GROUP BY 1
         ORDER BY 1
       `,
