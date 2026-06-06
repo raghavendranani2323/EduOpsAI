@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { Upload } from "lucide-react";
 import { requireInstitution } from "@/lib/tenant/current";
 import { withRls } from "@/lib/prisma/rls";
@@ -91,14 +92,16 @@ export default async function StudentsPage({
         </div>
       </div>
 
-      <StudentsClient
-        students={page}
-        classes={classes}
-        total={total}
-        nextCursor={nextCursor}
-        currentFilters={{ q, classId, status }}
-        terminology={t}
-      />
+      <Suspense fallback={null}>
+        <StudentsClient
+          students={page}
+          classes={classes}
+          total={total}
+          nextCursor={nextCursor}
+          currentFilters={{ q, classId, status }}
+          terminology={t}
+        />
+      </Suspense>
     </div>
   );
 }
