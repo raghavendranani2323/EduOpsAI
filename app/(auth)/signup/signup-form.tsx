@@ -42,7 +42,7 @@ export function SignupForm() {
     // If no session, email confirmation is required
     if (!signUpData.session) {
       setLoading(false);
-      setError("Check your email and click the confirmation link, then come back to log in.");
+      setError("Almost there! Check your email and click the confirmation link to activate your account.");
       return;
     }
 
