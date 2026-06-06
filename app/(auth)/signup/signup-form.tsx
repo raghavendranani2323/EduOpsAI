@@ -28,18 +28,24 @@ export function SignupForm() {
   async function onSubmit(data: FormData) {
     setLoading(true);
     setError(null);
-    const { error } = await supabase.auth.signUp({
+    const { data: signUpData, error } = await supabase.auth.signUp({
       email: data.email,
       password: data.password,
-      options: {
-        data: { full_name: data.fullName },
-      },
+      options: { data: { full_name: data.fullName } },
     });
     if (error) {
       setError(error.message);
       setLoading(false);
       return;
     }
+
+    // If no session, email confirmation is required
+    if (!signUpData.session) {
+      setLoading(false);
+      setError("Check your email and click the confirmation link, then come back to log in.");
+      return;
+    }
+
     router.push("/onboarding");
     router.refresh();
   }
