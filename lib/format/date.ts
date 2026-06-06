@@ -26,6 +26,12 @@ export function toInputDate(date: Date | string): string {
   return d.toISOString().split("T")[0];
 }
 
+/** Today's date in IST (UTC+5:30) as YYYY-MM-DD */
+export function todayIST(): string {
+  const ist = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
+  return ist.toISOString().split("T")[0];
+}
+
 /** Indian academic year: April–March */
 export function currentAcademicYear(): string {
   const now = new Date();

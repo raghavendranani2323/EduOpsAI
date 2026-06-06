@@ -1,0 +1,37 @@
+import { NextResponse } from "next/server";
+import { requireInstitution } from "@/lib/tenant/current";
+import { withRls } from "@/lib/prisma/rls";
+
+export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { user, institution } = await requireInstitution();
+    const { id } = await params;
+    const body = await req.json() as { kind?: string; language?: string; body?: string };
+
+    const data: Record<string, string> = {};
+    if (body.kind)     data.kind     = body.kind;
+    if (body.language) data.language = body.language;
+    if (body.body)     data.body     = body.body.trim();
+
+    const count = await withRls(user.id, (tx) =>
+      tx.messageTemplate.updateMany({ where: { id, institutionId: institution.id }, data })
+    );
+    if (count.count === 0) return NextResponse.json({ ok: false, error: "Not found" }, { status: 404 });
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    return NextResponse.json({ ok: false, error: String(e) }, { status: 500 });
+  }
+}
+
+export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { user, institution } = await requireInstitution();
+    const { id } = await params;
+    await withRls(user.id, (tx) =>
+      tx.messageTemplate.deleteMany({ where: { id, institutionId: institution.id } })
+    );
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    return NextResponse.json({ ok: false, error: String(e) }, { status: 500 });
+  }
+}
