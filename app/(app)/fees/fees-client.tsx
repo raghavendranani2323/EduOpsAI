@@ -37,7 +37,7 @@ interface Props {
   invoices: Invoice[];
   classes: { id: string; name: string }[];
   total: number;
-  nextCursor: string;
+  nextCursor: string | null;
   currentFilters: { status: string; classId: string; month: string; q: string };
 }
 

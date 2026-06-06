@@ -1,6 +1,21 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { requireInstitution } from "@/lib/tenant/current";
 import { withRls } from "@/lib/prisma/rls";
+
+const studentSchema = z.object({
+  fullName:    z.string().min(1, "Full name is required").max(200),
+  admissionNo: z.string().max(50).optional(),
+  gender:      z.enum(["MALE", "FEMALE", "OTHER"]).optional(),
+  dob:         z.string().optional(),
+  classId:     z.string().optional(),
+  guardian: z.object({
+    fullName: z.string().min(1).max(200),
+    phone:    z.string().min(10).max(15),
+    relation: z.string().max(50).optional(),
+  }).optional(),
+  tagIds: z.array(z.string()).max(20).optional(),
+});
 
 const PAGE_SIZE = 50;
 
@@ -58,19 +73,11 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const { user, institution } = await requireInstitution();
-    const body = await req.json() as {
-      fullName: string;
-      admissionNo?: string;
-      gender?: string;
-      dob?: string;
-      classId?: string;
-      guardian?: { fullName: string; phone: string; relation?: string };
-      tagIds?: string[];
-    };
-
-    if (!body.fullName?.trim()) {
-      return NextResponse.json({ ok: false, error: "Full name is required" }, { status: 400 });
+    const parsed = studentSchema.safeParse(await req.json());
+    if (!parsed.success) {
+      return NextResponse.json({ ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
     }
+    const body = parsed.data;
 
     const student = await withRls(user.id, async (tx) => {
       const s = await tx.student.create({
@@ -78,7 +85,7 @@ export async function POST(req: Request) {
           institutionId: institution.id,
           fullName: body.fullName.trim(),
           admissionNo: body.admissionNo?.trim() || null,
-          gender: (body.gender as "MALE" | "FEMALE" | "OTHER" | undefined) || null,
+          gender: body.gender ?? null,
           dob: body.dob ? new Date(body.dob) : null,
           classId: body.classId || null,
         },

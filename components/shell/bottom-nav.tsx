@@ -2,15 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Users, CalendarCheck, IndianRupee, UserPlus } from "lucide-react";
+import { LayoutDashboard, Users, CalendarCheck, IndianRupee, MoreHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
-  { href: "/dashboard",    icon: LayoutDashboard, label: "Dashboard" },
-  { href: "/students",     icon: Users,            label: "Students"  },
-  { href: "/attendance",   icon: CalendarCheck,    label: "Attend."   },
-  { href: "/fees",         icon: IndianRupee,      label: "Fees"      },
-  { href: "/admissions",   icon: UserPlus,         label: "Admits"    },
+  { href: "/dashboard",    icon: LayoutDashboard, label: "Home"     },
+  { href: "/students",     icon: Users,            label: "Students" },
+  { href: "/attendance",   icon: CalendarCheck,    label: "Attend."  },
+  { href: "/fees",         icon: IndianRupee,      label: "Fees"     },
+  { href: "/more",         icon: MoreHorizontal,   label: "More"     },
 ];
 
 export function BottomNav() {

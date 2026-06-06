@@ -28,7 +28,7 @@ export default async function FeesPage({
   const periodEnd   = new Date(year, mon, 0);
   const todayDate   = new Date(today);
 
-  const { invoices, classes, summary, total } = await withRls(user.id, async (tx) => {
+  const { invoices, classes, summary, total, nextCursor } = await withRls(user.id, async (tx) => {
     // Build where imperatively so TypeScript can infer include types correctly
     const where: Prisma.InvoiceWhereInput = {
       institutionId: institution.id,
@@ -90,7 +90,8 @@ export default async function FeesPage({
 
     let collected = 0, outstanding = 0;
     summaryData.forEach(g => {
-      if (g.status === "PAID") collected += g._sum.amountPaid ?? 0;
+      // Count every paise actually paid this period, regardless of invoice status
+      if (g.status !== "CANCELLED") collected += g._sum.amountPaid ?? 0;
       if (g.status === "UNPAID" || g.status === "PARTIAL") {
         outstanding += (g._sum.amountDue ?? 0) - (g._sum.amountPaid ?? 0);
       }
@@ -162,7 +163,7 @@ export default async function FeesPage({
         invoices={invoices}
         classes={classes}
         total={total}
-        nextCursor={cursor}
+        nextCursor={nextCursor}
         currentFilters={{ status, classId, month, q }}
       />
     </div>

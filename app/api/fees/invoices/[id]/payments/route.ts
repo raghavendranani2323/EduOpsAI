@@ -29,6 +29,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       if (!invoice) throw new Error("Invoice not found");
       if (invoice.status === "CANCELLED") throw new Error("Cannot pay a cancelled invoice");
 
+      const remaining = invoice.amountDue - invoice.amountPaid;
+      if (amount > remaining) {
+        throw new Error(`Amount exceeds balance due (₹${(remaining / 100).toFixed(2)})`);
+      }
+
       // Record payment
       await tx.payment.create({
         data: {

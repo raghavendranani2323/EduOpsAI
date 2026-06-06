@@ -47,7 +47,16 @@ export async function POST(req: NextRequest) {
     update: {},
   });
 
-  // Create membership + mark invitation accepted in one transaction
+  // Don't overwrite an existing higher role with a lower one from an invitation
+  const ROLE_RANK: Record<string, number> = { OWNER: 4, ADMIN: 3, ACCOUNTANT: 2, TEACHER: 1 };
+  const existing = await prisma.membership.findUnique({
+    where: { userId_institutionId: { userId: user.id, institutionId: invitation.institutionId } },
+  });
+
+  const finalRole = existing && ROLE_RANK[existing.role] > ROLE_RANK[invitation.role]
+    ? existing.role
+    : invitation.role;
+
   await prisma.$transaction([
     prisma.membership.upsert({
       where: { userId_institutionId: { userId: user.id, institutionId: invitation.institutionId } },
@@ -59,7 +68,7 @@ export async function POST(req: NextRequest) {
         invitedBy: null,
       },
       update: {
-        role: invitation.role,
+        role: finalRole,
         revokedAt: null,
         acceptedAt: new Date(),
       },

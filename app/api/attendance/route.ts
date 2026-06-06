@@ -1,6 +1,18 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { requireInstitution } from "@/lib/tenant/current";
 import { withRls } from "@/lib/prisma/rls";
+
+const attendanceSchema = z.object({
+  classId:      z.string().min(1),
+  date:         z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date"),
+  sessionLabel: z.string().max(20).optional(),
+  records: z.array(z.object({
+    studentId: z.string().min(1),
+    status:    z.enum(["PRESENT", "ABSENT", "LATE", "HALF_DAY"]),
+    note:      z.string().max(500).optional(),
+  })).max(500),
+});
 
 export async function GET(req: Request) {
   try {
@@ -33,22 +45,13 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const { user, institution } = await requireInstitution();
-    const body = await req.json() as {
-      classId:      string;
-      date:         string;
-      sessionLabel?: string;
-      records:      { studentId: string; status: string; note?: string }[];
-    };
-
-    const { classId, date, records } = body;
-    const sessionLabel = body.sessionLabel ?? "morning";
-
-    if (!classId || !date || !Array.isArray(records)) {
-      return NextResponse.json({ ok: false, error: "classId, date, and records are required" }, { status: 400 });
+    const parsed = attendanceSchema.safeParse(await req.json());
+    if (!parsed.success) {
+      return NextResponse.json({ ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
     }
-
-    const validStatuses = new Set(["PRESENT", "ABSENT", "LATE", "HALF_DAY"]);
-    const cleaned = records.filter(r => r.studentId && validStatuses.has(r.status));
+    const { classId, date, records } = parsed.data;
+    const sessionLabel = parsed.data.sessionLabel ?? "morning";
+    const cleaned = records;
 
     const session = await withRls(user.id, async (tx) => {
       const session = await tx.attendanceSession.upsert({
@@ -78,7 +81,7 @@ export async function POST(req: Request) {
           data: cleaned.map(r => ({
             sessionId: session.id,
             studentId: r.studentId,
-            status:    r.status as "PRESENT" | "ABSENT" | "LATE" | "HALF_DAY",
+            status:    r.status,
             note:      r.note ?? null,
           })),
         });

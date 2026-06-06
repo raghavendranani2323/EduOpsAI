@@ -339,6 +339,7 @@ model Invoice {
   feePlan     FeePlan?     @relation(fields: [feePlanId], references: [id])
   payments    Payment[]
 
+  @@index([institutionId, studentId, feePlanId, periodStart], name: "invoices_dedupe_idx")
   @@map("invoices")
 }
 
