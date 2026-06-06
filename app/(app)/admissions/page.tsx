@@ -20,7 +20,7 @@ export default async function AdmissionsPage() {
       }),
     ]);
 
-    const dueTodayCount = leads.filter(l =>
+    const dueTodayCount = leads.filter((l: { nextFollowupAt: Date | null; stage: string }) =>
       l.nextFollowupAt &&
       l.stage !== "CONVERTED" &&
       l.stage !== "LOST" &&
