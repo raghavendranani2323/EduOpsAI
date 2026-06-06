@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import { CheckCircle2, XCircle, Clock, MinusCircle } from "lucide-react";
+import { CheckCircle2, XCircle, Clock, MinusCircle, MessageCircle } from "lucide-react";
 import type { Terminology } from "@/lib/i18n/terminology";
 
 type Status = "PRESENT" | "ABSENT" | "LATE" | "HALF_DAY";
@@ -49,6 +49,8 @@ export function AttendanceSheet({ classId, date, students, existingRecords, isEd
   const [saving,  setSaving]      = useState(false);
   const [saved,   setSaved]       = useState(false);
   const [error,   setError]       = useState<string | null>(null);
+  const [alerts,  setAlerts]      = useState<Array<{ studentId: string; studentName: string; guardianName: string | null; guardianPhone: string; link: string }>>([]);
+  const [notified, setNotified]   = useState<Record<string, boolean>>({});
 
   const toggle = useCallback((studentId: string) => {
     setStatusMap((prev: { [id: string]: Status }) => {
@@ -77,6 +79,7 @@ export function AttendanceSheet({ classId, date, students, existingRecords, isEd
     const result = await res.json();
     if (!result.ok) { setError(result.error); setSaving(false); return; }
     setSaved(true);
+    setAlerts(result.alerts ?? []);
     setSaving(false);
   }
 
@@ -144,6 +147,48 @@ export function AttendanceSheet({ classId, date, students, existingRecords, isEd
           );
         })}
       </div>
+
+      {/* Absent-alert dialog */}
+      {saved && alerts.length > 0 && (
+        <div className="fixed inset-x-0 bottom-24 md:left-64 mx-4 bg-card border rounded-xl shadow-lg p-4 z-20 max-h-[60vh] overflow-y-auto">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <p className="font-semibold text-sm">Notify parents of absentees</p>
+              <p className="text-xs text-muted-foreground">{alerts.length} parent{alerts.length === 1 ? "" : "s"} to message</p>
+            </div>
+            <button
+              onClick={() => setAlerts([])}
+              className="text-xs text-muted-foreground hover:text-foreground"
+            >
+              Dismiss
+            </button>
+          </div>
+          <div className="space-y-2">
+            {alerts.map(a => (
+              <div key={a.studentId} className="flex items-center gap-3 border rounded-lg p-2.5">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{a.studentName}</p>
+                  <p className="text-xs text-muted-foreground truncate">{a.guardianName ?? "Parent"} · {a.guardianPhone}</p>
+                </div>
+                <a
+                  href={a.link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setNotified(n => ({ ...n, [a.studentId]: true }))}
+                  className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium min-h-[36px] ${
+                    notified[a.studentId]
+                      ? "bg-muted text-muted-foreground"
+                      : "bg-green-600 text-white"
+                  }`}
+                >
+                  <MessageCircle className="h-3.5 w-3.5" />
+                  {notified[a.studentId] ? "Sent" : "WhatsApp"}
+                </a>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Sticky submit */}
       <div className="fixed bottom-0 inset-x-0 md:left-64 bg-background border-t p-4 pb-[env(safe-area-inset-bottom,16px)] space-y-2 z-10">

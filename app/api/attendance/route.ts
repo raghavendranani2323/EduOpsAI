@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireInstitution } from "@/lib/tenant/current";
 import { withRls } from "@/lib/prisma/rls";
+import { whatsappLink } from "@/lib/format/phone";
+import { formatDateLong } from "@/lib/format/date";
 
 const attendanceSchema = z.object({
   classId:      z.string().min(1),
@@ -90,7 +92,43 @@ export async function POST(req: Request) {
       return session;
     });
 
-    return NextResponse.json({ ok: true, sessionId: session.id });
+    // Build absent-alert payload: WhatsApp deep-links for primary guardians of absent students.
+    const absentIds = cleaned.filter(r => r.status === "ABSENT").map(r => r.studentId);
+    const absentees = absentIds.length
+      ? await withRls(user.id, (tx) =>
+          tx.student.findMany({
+            where: { id: { in: absentIds }, institutionId: institution.id },
+            select: {
+              id: true,
+              fullName: true,
+              guardians: {
+                where: { isPrimary: true },
+                take: 1,
+                include: { guardian: { select: { fullName: true, phone: true } } },
+              },
+            },
+          })
+        )
+      : [];
+
+    const dateLabel = formatDateLong(date);
+    const alerts = absentees
+      .map(s => {
+        const g = s.guardians[0]?.guardian;
+        if (!g?.phone) return null;
+        const body = `Dear ${g.fullName ?? "Parent"}, this is to inform you that ${s.fullName} was marked absent today (${dateLabel}) at ${institution.name}. Please contact us if this is unexpected.`;
+        return {
+          studentId: s.id,
+          studentName: s.fullName,
+          guardianName: g.fullName,
+          guardianPhone: g.phone,
+          link: whatsappLink(g.phone, body),
+          body,
+        };
+      })
+      .filter((x): x is NonNullable<typeof x> => x !== null);
+
+    return NextResponse.json({ ok: true, sessionId: session.id, alerts });
   } catch (e) {
     console.error(e);
     return NextResponse.json({ ok: false, error: "Failed to save attendance" }, { status: 500 });
