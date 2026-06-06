@@ -3,7 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Search, ChevronRight } from "lucide-react";
+import { Search, ChevronRight, MessageCircle, X } from "lucide-react";
 import { formatINR } from "@/lib/format/currency";
 import { formatDate } from "@/lib/format/date";
 
@@ -48,6 +48,29 @@ export function FeesClient({ invoices: init, classes, total, currentFilters }: P
 
   const [invoices] = useState(init);
   const searchRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [reminders, setReminders] = useState<Array<{ invoiceId: string; studentName: string; guardianName: string | null; guardianPhone: string; amount: number; link: string }>>([]);
+  const [sending,    setSending]   = useState(false);
+  const [reminderError, setReminderError] = useState<string | null>(null);
+  const [sentMap,    setSentMap]   = useState<Record<string, boolean>>({});
+
+  const sendReminders = useCallback(async (scope: "overdue" | "month") => {
+    setSending(true);
+    setReminderError(null);
+    setSentMap({});
+    const res = await fetch("/api/fees/reminders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        scope,
+        classId: currentFilters.classId || undefined,
+        month:   scope === "month" ? currentFilters.month : undefined,
+      }),
+    });
+    const result = await res.json();
+    setSending(false);
+    if (!result.ok) { setReminderError(result.error ?? "Failed"); return; }
+    setReminders(result.reminders ?? []);
+  }, [currentFilters.classId, currentFilters.month]);
 
   const updateFilter = useCallback(
     (key: string, value: string) => {
@@ -62,6 +85,74 @@ export function FeesClient({ invoices: init, classes, total, currentFilters }: P
 
   return (
     <div className="space-y-3">
+      {/* Reminders action row */}
+      <div className="flex gap-2 flex-wrap">
+        <button
+          onClick={() => sendReminders("overdue")}
+          disabled={sending}
+          className="flex items-center gap-1.5 bg-amber-600 text-white rounded-xl px-3 py-2 text-xs font-medium min-h-[36px] disabled:opacity-60"
+        >
+          <MessageCircle className="h-3.5 w-3.5" />
+          {sending ? "Preparing…" : "Remind overdue"}
+        </button>
+        <button
+          onClick={() => sendReminders("month")}
+          disabled={sending}
+          className="flex items-center gap-1.5 border rounded-xl px-3 py-2 text-xs font-medium min-h-[36px] disabled:opacity-60 hover:bg-muted"
+        >
+          <MessageCircle className="h-3.5 w-3.5" />
+          Remind all this month
+        </button>
+        {reminderError && <span className="text-xs text-destructive self-center">{reminderError}</span>}
+      </div>
+
+      {/* Reminders dialog */}
+      {reminders.length > 0 && (
+        <div className="fixed inset-0 bg-black/40 z-30 flex items-end md:items-center justify-center p-0 md:p-4">
+          <div className="bg-card border rounded-t-2xl md:rounded-2xl shadow-xl w-full md:max-w-lg max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b">
+              <div>
+                <p className="font-semibold text-sm">Send {reminders.length} reminder{reminders.length === 1 ? "" : "s"}</p>
+                <p className="text-xs text-muted-foreground">Tap each to open WhatsApp</p>
+              </div>
+              <button
+                onClick={() => setReminders([])}
+                className="p-2 rounded-lg hover:bg-muted"
+                aria-label="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-3 space-y-2">
+              {reminders.map(r => (
+                <div key={r.invoiceId} className="flex items-center gap-3 border rounded-lg p-2.5">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{r.studentName}</p>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {r.guardianName ?? "Parent"} · {r.guardianPhone} · {formatINR(r.amount)}
+                    </p>
+                  </div>
+                  <a
+                    href={r.link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => setSentMap(m => ({ ...m, [r.invoiceId]: true }))}
+                    className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium min-h-[36px] shrink-0 ${
+                      sentMap[r.invoiceId]
+                        ? "bg-muted text-muted-foreground"
+                        : "bg-green-600 text-white"
+                    }`}
+                  >
+                    <MessageCircle className="h-3.5 w-3.5" />
+                    {sentMap[r.invoiceId] ? "Sent" : "Send"}
+                  </a>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Status pills */}
       <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
         {STATUSES.map(s => (
