@@ -3,25 +3,24 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  LayoutDashboard,
-  Users,
-  CalendarCheck,
-  IndianRupee,
-  UserPlus,
-  MessageCircle,
-  Settings,
-  GraduationCap,
+  LayoutDashboard, Users, CalendarCheck, IndianRupee, UserPlus,
+  MessageCircle, Settings, GraduationCap, ClipboardList, BookOpen,
+  Bell, Calendar,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
-  { href: "/dashboard",       icon: LayoutDashboard, label: "Dashboard"      },
-  { href: "/students",        icon: Users,            label: "Students"       },
-  { href: "/attendance",      icon: CalendarCheck,    label: "Attendance"     },
-  { href: "/fees",            icon: IndianRupee,      label: "Fees"           },
-  { href: "/admissions",      icon: UserPlus,         label: "Admissions"     },
-  { href: "/communications",  icon: MessageCircle,    label: "Communications" },
-  { href: "/settings",        icon: Settings,         label: "Settings"       },
+  { href: "/dashboard",      icon: LayoutDashboard, label: "Dashboard"      },
+  { href: "/students",       icon: Users,           label: "Students"       },
+  { href: "/attendance",     icon: CalendarCheck,   label: "Attendance"     },
+  { href: "/fees",           icon: IndianRupee,     label: "Fees"           },
+  { href: "/exams",          icon: ClipboardList,   label: "Exams"          },
+  { href: "/timetable",      icon: Calendar,        label: "Timetable"      },
+  { href: "/homework",       icon: BookOpen,        label: "Homework"       },
+  { href: "/notices",        icon: Bell,            label: "Notices"        },
+  { href: "/admissions",     icon: UserPlus,        label: "Admissions"     },
+  { href: "/communications", icon: MessageCircle,   label: "Communications" },
+  { href: "/settings",       icon: Settings,        label: "Settings"       },
 ];
 
 export function Sidebar() {

@@ -6,6 +6,7 @@ import { withRls } from "@/lib/prisma/rls";
 import { formatINR } from "@/lib/format/currency";
 import { formatDate, todayIST } from "@/lib/format/date";
 import { RecordPaymentClient } from "./record-payment-client";
+import { RazorpayCheckout } from "./razorpay-checkout";
 
 export default async function InvoiceDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id }              = await params;
@@ -112,12 +113,14 @@ export default async function InvoiceDetailPage({ params }: { params: Promise<{ 
         </section>
       )}
 
-      {/* Record payment (client component) */}
+      {/* Payment options */}
       {invoice.status !== "PAID" && invoice.status !== "CANCELLED" && (
-        <RecordPaymentClient
-          invoiceId={invoice.id}
-          remaining={remaining}
-        />
+        <div className="space-y-3">
+          {process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID && (
+            <RazorpayCheckout invoiceId={invoice.id} remaining={remaining} />
+          )}
+          <RecordPaymentClient invoiceId={invoice.id} remaining={remaining} />
+        </div>
       )}
     </div>
   );
