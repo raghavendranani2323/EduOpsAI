@@ -1,12 +1,14 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
-import { CheckCircle2, XCircle, Clock, MinusCircle, MessageCircle, Copy, ChevronsDown } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { CheckCircle2, XCircle, Clock, MinusCircle, MessageCircle, Copy, ChevronsDown, CloudOff, RefreshCw } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import type { Terminology } from "@/lib/i18n/terminology";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetBody, SheetFooter } from "@/components/ui/sheet";
+import { submitOrQueue } from "@/lib/offline/db";
+import { notifyOfflineQueueChanged } from "@/lib/offline/use-pending-mutations";
 
 type Status = "PRESENT" | "ABSENT" | "LATE" | "HALF_DAY";
 
@@ -54,9 +56,24 @@ export function AttendanceSheet({ classId, date, students, existingRecords, yest
   const [touched, setTouched]     = useState<Set<string>>(new Set(existingRecords.map(r => r.studentId)));
   const [saving, setSaving]       = useState(false);
   const [saved, setSaved]         = useState(false);
+  const [queued, setQueued]       = useState(false);
+  const [isOnline, setIsOnline]   = useState(true);
   const [alerts, setAlerts]       = useState<Array<{ studentId: string; studentName: string; guardianName: string | null; guardianPhone: string; link: string }>>([]);
   const [notified, setNotified]   = useState<Record<string, boolean>>({});
   const [pickerStudent, setPickerStudent] = useState<AttStudent | null>(null);
+
+  useEffect(() => {
+    if (typeof navigator === "undefined") return;
+    setIsOnline(navigator.onLine);
+    const on  = () => setIsOnline(true);
+    const off = () => setIsOnline(false);
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    return () => {
+      window.removeEventListener("online", on);
+      window.removeEventListener("offline", off);
+    };
+  }, []);
 
   const toggle = useCallback((studentId: string) => {
     setStatusMap(prev => {
@@ -66,12 +83,14 @@ export function AttendanceSheet({ classId, date, students, existingRecords, yest
     });
     setTouched(prev => { const n = new Set(prev); n.add(studentId); return n; });
     setSaved(false);
+    setQueued(false);
   }, []);
 
   const setStatus = useCallback((studentId: string, status: Status) => {
     setStatusMap(prev => ({ ...prev, [studentId]: status }));
     setTouched(prev => { const n = new Set(prev); n.add(studentId); return n; });
     setSaved(false);
+    setQueued(false);
     setPickerStudent(null);
   }, []);
 
@@ -86,18 +105,39 @@ export function AttendanceSheet({ classId, date, students, existingRecords, yest
   async function submit() {
     setSaving(true);
     const records = students.map(s => ({ studentId: s.id, status: statusMap[s.id] ?? "PRESENT" }));
-    const res = await fetch("/api/attendance", {
+    const body = { classId, date, sessionLabel: "morning", records };
+
+    const outcome = await submitOrQueue({
+      url: "/api/attendance",
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ classId, date, sessionLabel: "morning", records }),
+      body,
+      // dedupeKey ensures repeated submissions for same class+date replace each other
+      // (last write wins) instead of stacking up in the queue.
+      dedupeKey: `attendance:${classId}:${date}:morning`,
+      description: `Attendance · ${counts.ABSENT} absent`,
     });
-    const result = await res.json();
+
     setSaving(false);
-    if (!result.ok) {
-      toast.error(result.error ?? "Could not save attendance");
+
+    if (!outcome.ok) {
+      toast.error(outcome.error || "Could not save attendance");
       return;
     }
+
+    if (outcome.queued) {
+      setQueued(true);
+      setSaved(false);
+      notifyOfflineQueueChanged();
+      toast.info("Saved offline", {
+        description: "Will sync to the server when you're back online. Safe to close this page.",
+        duration: 5000,
+      });
+      return;
+    }
+
     setSaved(true);
+    setQueued(false);
+    const result = outcome.response as { alerts?: Array<{ studentId: string; studentName: string; guardianName: string | null; guardianPhone: string; link: string }> };
     setAlerts(result.alerts ?? []);
     toast.success(isEdit ? "Attendance updated" : "Attendance saved", {
       description: `${counts.ABSENT} absent · ${counts.PRESENT} present`,
@@ -131,6 +171,14 @@ export function AttendanceSheet({ classId, date, students, existingRecords, yest
 
   return (
     <div className="flex flex-col h-full">
+      {/* Offline banner — only shown when navigator says offline */}
+      {!isOnline && (
+        <div className="bg-amber-500 text-white text-xs font-medium px-4 py-1.5 flex items-center gap-2 animate-fade-in">
+          <CloudOff className="h-3.5 w-3.5" />
+          <span>You&apos;re offline. Your submission will be saved on this device and sent when you reconnect.</span>
+        </div>
+      )}
+
       {/* Summary bar */}
       <div className="flex items-center gap-3 px-4 py-2.5 border-b bg-muted/30 text-sm overflow-x-auto scrollbar-none">
         {(Object.keys(STATUS_CONFIG) as Status[]).map(s => {
@@ -264,20 +312,30 @@ export function AttendanceSheet({ classId, date, students, existingRecords, yest
       </Sheet>
 
       {/* Sticky submit */}
-      <div className="fixed bottom-0 inset-x-0 md:left-56 bg-card/95 backdrop-blur-md border-t p-3 pb-[calc(env(safe-area-inset-bottom)+12px)] z-10">
+      <div className="fixed bottom-0 inset-x-0 md:left-56 bg-card/95 backdrop-blur-md border-t p-3 pb-[calc(env(safe-area-inset-bottom)+12px)] z-10 space-y-2">
+        {queued && (
+          <div className="flex items-center justify-center gap-1.5 text-xs text-amber-700 dark:text-amber-300 font-medium">
+            <RefreshCw className="h-3 w-3 animate-pulse" />
+            Saved offline · will sync when online
+          </div>
+        )}
         <Button
           onClick={submit}
-          disabled={saving || saved}
+          disabled={saving || saved || queued}
           size="lg"
           className="w-full h-13"
-          variant={saved ? "success" : "default"}
+          variant={saved ? "success" : queued ? "secondary" : "default"}
         >
           {saving
             ? "Saving…"
             : saved
             ? <><CheckCircle2 /> Saved</>
+            : queued
+            ? <><CloudOff /> Queued · {counts.ABSENT} absent</>
             : isEdit
             ? `Update · ${counts.ABSENT} absent`
+            : !isOnline
+            ? `Save offline · ${counts.ABSENT} absent`
             : `Submit · ${counts.ABSENT} absent`}
         </Button>
       </div>
