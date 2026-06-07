@@ -1,8 +1,12 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import { CheckCircle2, XCircle, Clock, MinusCircle, MessageCircle } from "lucide-react";
+import { CheckCircle2, XCircle, Clock, MinusCircle, MessageCircle, Copy, ChevronsDown } from "lucide-react";
+import { motion } from "framer-motion";
+import { toast } from "sonner";
 import type { Terminology } from "@/lib/i18n/terminology";
+import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetBody, SheetFooter } from "@/components/ui/sheet";
 
 type Status = "PRESENT" | "ABSENT" | "LATE" | "HALF_DAY";
 
@@ -24,52 +28,63 @@ interface Props {
   date: string;
   students: AttStudent[];
   existingRecords: AttRecord[];
+  yesterdayRecords: { studentId: string; status: Status }[];
   isEdit: boolean;
   terminology: Terminology;
 }
 
 const STATUS_CYCLE: Status[] = ["PRESENT", "ABSENT", "LATE", "HALF_DAY"];
 
-const STATUS_CONFIG: Record<Status, { label: string; color: string; bg: string; icon: React.ElementType }> = {
-  PRESENT:  { label: "P",  color: "text-green-700",  bg: "bg-green-100",  icon: CheckCircle2 },
-  ABSENT:   { label: "A",  color: "text-red-700",    bg: "bg-red-100",    icon: XCircle      },
-  LATE:     { label: "L",  color: "text-amber-700",  bg: "bg-amber-100",  icon: Clock        },
-  HALF_DAY: { label: "HD", color: "text-orange-700", bg: "bg-orange-100", icon: MinusCircle  },
+const STATUS_CONFIG: Record<Status, { label: string; full: string; color: string; bg: string; icon: React.ElementType }> = {
+  PRESENT:  { label: "P",  full: "Present",  color: "text-green-700 dark:text-green-300",  bg: "bg-green-100 dark:bg-green-500/15",  icon: CheckCircle2 },
+  ABSENT:   { label: "A",  full: "Absent",   color: "text-red-700 dark:text-red-300",      bg: "bg-red-100 dark:bg-red-500/15",      icon: XCircle      },
+  LATE:     { label: "L",  full: "Late",     color: "text-amber-700 dark:text-amber-300",  bg: "bg-amber-100 dark:bg-amber-500/15",  icon: Clock        },
+  HALF_DAY: { label: "HD", full: "Half day", color: "text-orange-700 dark:text-orange-300",bg: "bg-orange-100 dark:bg-orange-500/15",icon: MinusCircle  },
 };
 
-export function AttendanceSheet({ classId, date, students, existingRecords, isEdit, terminology: t }: Props) {
-  const initial = useMemo<{ [id: string]: Status }>(() => {
-    const map: { [id: string]: Status } = {};
+export function AttendanceSheet({ classId, date, students, existingRecords, yesterdayRecords, isEdit }: Props) {
+  const initial = useMemo<Record<string, Status>>(() => {
+    const map: Record<string, Status> = {};
     students.forEach(s => { map[s.id] = "PRESENT"; });
     existingRecords.forEach(r => { map[r.studentId] = r.status; });
     return map;
   }, [students, existingRecords]);
 
-  const [statusMap, setStatusMap] = useState<{ [id: string]: Status }>(initial);
-  const [saving,  setSaving]      = useState(false);
-  const [saved,   setSaved]       = useState(false);
-  const [error,   setError]       = useState<string | null>(null);
-  const [alerts,  setAlerts]      = useState<Array<{ studentId: string; studentName: string; guardianName: string | null; guardianPhone: string; link: string }>>([]);
+  const [statusMap, setStatusMap] = useState<Record<string, Status>>(initial);
+  const [touched, setTouched]     = useState<Set<string>>(new Set(existingRecords.map(r => r.studentId)));
+  const [saving, setSaving]       = useState(false);
+  const [saved, setSaved]         = useState(false);
+  const [alerts, setAlerts]       = useState<Array<{ studentId: string; studentName: string; guardianName: string | null; guardianPhone: string; link: string }>>([]);
   const [notified, setNotified]   = useState<Record<string, boolean>>({});
+  const [pickerStudent, setPickerStudent] = useState<AttStudent | null>(null);
 
   const toggle = useCallback((studentId: string) => {
-    setStatusMap((prev: { [id: string]: Status }) => {
+    setStatusMap(prev => {
       const cur = prev[studentId] ?? "PRESENT";
       const next = STATUS_CYCLE[(STATUS_CYCLE.indexOf(cur) + 1) % STATUS_CYCLE.length];
       return { ...prev, [studentId]: next };
     });
+    setTouched(prev => { const n = new Set(prev); n.add(studentId); return n; });
     setSaved(false);
   }, []);
 
+  const setStatus = useCallback((studentId: string, status: Status) => {
+    setStatusMap(prev => ({ ...prev, [studentId]: status }));
+    setTouched(prev => { const n = new Set(prev); n.add(studentId); return n; });
+    setSaved(false);
+    setPickerStudent(null);
+  }, []);
+
   const counts = useMemo(() => {
-    const c: { [K in Status]: number } = { PRESENT: 0, ABSENT: 0, LATE: 0, HALF_DAY: 0 };
+    const c: Record<Status, number> = { PRESENT: 0, ABSENT: 0, LATE: 0, HALF_DAY: 0 };
     Object.values(statusMap).forEach(s => { c[s]++; });
     return c;
   }, [statusMap]);
 
+  const untouchedCount = students.length - touched.size;
+
   async function submit() {
     setSaving(true);
-    setError(null);
     const records = students.map(s => ({ studentId: s.id, status: statusMap[s.id] ?? "PRESENT" }));
     const res = await fetch("/api/attendance", {
       method: "POST",
@@ -77,141 +92,194 @@ export function AttendanceSheet({ classId, date, students, existingRecords, isEd
       body: JSON.stringify({ classId, date, sessionLabel: "morning", records }),
     });
     const result = await res.json();
-    if (!result.ok) { setError(result.error); setSaving(false); return; }
+    setSaving(false);
+    if (!result.ok) {
+      toast.error(result.error ?? "Could not save attendance");
+      return;
+    }
     setSaved(true);
     setAlerts(result.alerts ?? []);
-    setSaving(false);
+    toast.success(isEdit ? "Attendance updated" : "Attendance saved", {
+      description: `${counts.ABSENT} absent · ${counts.PRESENT} present`,
+    });
   }
 
-  function markAll(status: Status) {
-    const next: Record<string, Status> = {};
-    students.forEach(s => { next[s.id] = status; });
-    setStatusMap(next);
+  function copyYesterday() {
+    if (!yesterdayRecords.length) {
+      toast.info("No attendance recorded yesterday");
+      return;
+    }
+    const map: Record<string, Status> = {};
+    students.forEach(s => { map[s.id] = "PRESENT"; });
+    yesterdayRecords.forEach(r => { if (map[r.studentId] !== undefined) map[r.studentId] = r.status; });
+    setStatusMap(map);
+    setTouched(new Set(students.map(s => s.id)));
     setSaved(false);
+    toast.success("Copied yesterday's attendance");
+  }
+
+  function markRestPresent() {
+    setStatusMap(prev => {
+      const next = { ...prev };
+      students.forEach(s => { if (!touched.has(s.id)) next[s.id] = "PRESENT"; });
+      return next;
+    });
+    setTouched(new Set(students.map(s => s.id)));
+    setSaved(false);
+    toast.success(`${untouchedCount} marked present`);
   }
 
   return (
     <div className="flex flex-col h-full">
       {/* Summary bar */}
-      <div className="flex gap-3 px-4 py-3 border-b bg-muted/30 text-sm">
-        {(["PRESENT", "ABSENT", "LATE", "HALF_DAY"] as Status[]).map(s => {
+      <div className="flex items-center gap-3 px-4 py-2.5 border-b bg-muted/30 text-sm overflow-x-auto scrollbar-none">
+        {(Object.keys(STATUS_CONFIG) as Status[]).map(s => {
           const cfg = STATUS_CONFIG[s];
           return (
-            <span key={s} className={`flex items-center gap-1 font-medium ${cfg.color}`}>
+            <span key={s} className={`flex items-center gap-1 font-semibold ${cfg.color} whitespace-nowrap`}>
               <span>{counts[s]}</span>
-              <span className="text-xs font-normal opacity-75">{cfg.label}</span>
+              <span className="text-xs font-medium opacity-75">{cfg.label}</span>
             </span>
           );
         })}
-        <div className="flex-1" />
-        <button
-          onClick={() => markAll("PRESENT")}
-          className="text-xs text-primary font-medium underline-offset-2 hover:underline"
-        >
-          All present
-        </button>
+      </div>
+
+      {/* Bulk actions */}
+      <div className="flex items-center gap-2 px-3 py-2 border-b bg-background overflow-x-auto scrollbar-none">
+        <Button size="sm" variant="outline" onClick={copyYesterday}>
+          <Copy /> Copy yesterday
+        </Button>
+        {untouchedCount > 0 && (
+          <Button size="sm" variant="outline" onClick={markRestPresent}>
+            <ChevronsDown /> Mark rest present ({untouchedCount})
+          </Button>
+        )}
       </div>
 
       {/* Student list */}
-      <div className="flex-1 overflow-y-auto pb-28">
-        {students.map(student => {
+      <div className="flex-1 overflow-y-auto pb-32">
+        {students.map((student, idx) => {
           const status = statusMap[student.id] ?? "PRESENT";
           const cfg    = STATUS_CONFIG[status];
           const Icon   = cfg.icon;
+          const isTouched = touched.has(student.id);
 
           return (
-            <button
+            <motion.button
               key={student.id}
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.15, delay: Math.min(idx * 0.01, 0.2) }}
               onClick={() => toggle(student.id)}
-              className={`w-full flex items-center gap-3 px-4 py-3.5 border-b text-left transition-colors active:scale-[0.99] ${status !== "PRESENT" ? "bg-red-50/50" : ""}`}
+              onContextMenu={(e) => { e.preventDefault(); setPickerStudent(student); }}
+              className={`w-full flex items-center gap-3 px-4 py-3 border-b text-left transition-colors active:bg-muted/60 ${status !== "PRESENT" ? "bg-red-50/40 dark:bg-red-500/5" : ""}`}
             >
-              {/* Avatar */}
               <div className="h-10 w-10 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-semibold shrink-0">
                 {student.fullName.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}
               </div>
-
-              {/* Info */}
-              <div className="flex-1 min-w-0 text-left">
-                <p className="font-medium text-sm">{student.fullName}</p>
-                {student.admissionNo && (
-                  <p className="text-xs text-muted-foreground">{student.admissionNo}</p>
-                )}
+              <div className="flex-1 min-w-0">
+                <p className="font-medium text-sm truncate">{student.fullName}</p>
+                <p className="text-xs text-muted-foreground">
+                  {student.admissionNo ?? "—"}
+                  {!isTouched && <span className="ml-2 text-amber-600 dark:text-amber-400">· unmarked</span>}
+                </p>
               </div>
-
-              {/* Status badge — large tap target */}
-              <div className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 min-w-[56px] justify-center ${cfg.bg} ${cfg.color}`}>
+              <motion.div
+                key={status}
+                initial={{ scale: 0.85 }}
+                animate={{ scale: 1 }}
+                transition={{ type: "spring", stiffness: 480, damping: 22 }}
+                className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 min-w-[64px] justify-center ${cfg.bg} ${cfg.color}`}
+              >
                 <Icon className="h-3.5 w-3.5" />
                 <span className="text-xs font-bold">{cfg.label}</span>
-              </div>
-            </button>
+              </motion.div>
+            </motion.button>
           );
         })}
       </div>
 
-      {/* Absent-alert dialog */}
-      {saved && alerts.length > 0 && (
-        <div className="fixed inset-x-0 bottom-24 md:left-64 mx-4 bg-card border rounded-xl shadow-lg p-4 z-20 max-h-[60vh] overflow-y-auto">
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <p className="font-semibold text-sm">Notify parents of absentees</p>
-              <p className="text-xs text-muted-foreground">{alerts.length} parent{alerts.length === 1 ? "" : "s"} to message</p>
+      {/* Status picker (long-press) */}
+      <Sheet open={!!pickerStudent} onOpenChange={(o) => !o && setPickerStudent(null)}>
+        <SheetContent>
+          <SheetHeader>
+            <SheetTitle>{pickerStudent?.fullName}</SheetTitle>
+          </SheetHeader>
+          <SheetBody>
+            <div className="grid grid-cols-2 gap-2">
+              {(Object.keys(STATUS_CONFIG) as Status[]).map(s => {
+                const cfg = STATUS_CONFIG[s];
+                const Icon = cfg.icon;
+                return (
+                  <button
+                    key={s}
+                    onClick={() => pickerStudent && setStatus(pickerStudent.id, s)}
+                    className={`flex items-center gap-3 rounded-xl border p-4 hover:border-primary/40 active:scale-[0.98] transition ${cfg.bg}`}
+                  >
+                    <Icon className={`h-5 w-5 ${cfg.color}`} />
+                    <span className={`font-semibold text-sm ${cfg.color}`}>{cfg.full}</span>
+                  </button>
+                );
+              })}
             </div>
-            <button
-              onClick={() => setAlerts([])}
-              className="text-xs text-muted-foreground hover:text-foreground"
-            >
-              Dismiss
-            </button>
-          </div>
-          <div className="space-y-2">
-            {alerts.map(a => (
-              <div key={a.studentId} className="flex items-center gap-3 border rounded-lg p-2.5">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{a.studentName}</p>
-                  <p className="text-xs text-muted-foreground truncate">{a.guardianName ?? "Parent"} · {a.guardianPhone}</p>
+          </SheetBody>
+        </SheetContent>
+      </Sheet>
+
+      {/* Absent alerts sheet */}
+      <Sheet open={saved && alerts.length > 0} onOpenChange={(o) => !o && setAlerts([])}>
+        <SheetContent>
+          <SheetHeader>
+            <SheetTitle>Notify absentees</SheetTitle>
+            <p className="text-xs text-muted-foreground mt-0.5">{alerts.length} parent{alerts.length === 1 ? "" : "s"} via WhatsApp</p>
+          </SheetHeader>
+          <SheetBody>
+            <div className="space-y-2">
+              {alerts.map(a => (
+                <div key={a.studentId} className="flex items-center gap-3 border rounded-xl p-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{a.studentName}</p>
+                    <p className="text-xs text-muted-foreground truncate">{a.guardianName ?? "Parent"} · {a.guardianPhone}</p>
+                  </div>
+                  <a
+                    href={a.link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => setNotified(n => ({ ...n, [a.studentId]: true }))}
+                    className={`tap flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold shrink-0 transition ${
+                      notified[a.studentId] ? "bg-muted text-muted-foreground" : "bg-green-600 text-white"
+                    }`}
+                  >
+                    <MessageCircle className="h-3.5 w-3.5" />
+                    {notified[a.studentId] ? "Sent" : "WhatsApp"}
+                  </a>
                 </div>
-                <a
-                  href={a.link}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={() => setNotified(n => ({ ...n, [a.studentId]: true }))}
-                  className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium min-h-[36px] ${
-                    notified[a.studentId]
-                      ? "bg-muted text-muted-foreground"
-                      : "bg-green-600 text-white"
-                  }`}
-                >
-                  <MessageCircle className="h-3.5 w-3.5" />
-                  {notified[a.studentId] ? "Sent" : "WhatsApp"}
-                </a>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+              ))}
+            </div>
+          </SheetBody>
+          <SheetFooter>
+            <Button variant="outline" onClick={() => setAlerts([])}>Done</Button>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
 
       {/* Sticky submit */}
-      <div className="fixed bottom-0 inset-x-0 md:left-64 bg-background border-t p-4 pb-[env(safe-area-inset-bottom,16px)] space-y-2 z-10">
-        {error && <p className="text-destructive text-sm text-center">{error}</p>}
-        {saved && (
-          <p className="text-green-700 text-sm text-center flex items-center justify-center gap-1.5">
-            <CheckCircle2 className="h-4 w-4" /> Attendance saved!
-          </p>
-        )}
-        <button
+      <div className="fixed bottom-0 inset-x-0 md:left-56 bg-card/95 backdrop-blur-md border-t p-3 pb-[calc(env(safe-area-inset-bottom)+12px)] z-10">
+        <Button
           onClick={submit}
           disabled={saving || saved}
-          className="w-full bg-primary text-primary-foreground rounded-xl py-3.5 text-sm font-semibold disabled:opacity-60 min-h-[52px]"
+          size="lg"
+          className="w-full h-13"
+          variant={saved ? "success" : "default"}
         >
           {saving
             ? "Saving…"
             : saved
-            ? "✓ Saved"
+            ? <><CheckCircle2 /> Saved</>
             : isEdit
-            ? `Update attendance · ${counts.ABSENT} absent`
-            : `Submit attendance · ${counts.ABSENT} absent`
-          }
-        </button>
+            ? `Update · ${counts.ABSENT} absent`
+            : `Submit · ${counts.ABSENT} absent`}
+        </Button>
       </div>
     </div>
   );

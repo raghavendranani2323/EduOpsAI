@@ -30,13 +30,16 @@ export default async function AttendanceClassPage({
   const { user, institution } = await requireInstitution();
   const t = getTerminology(institution.type);
 
-  const { cls, students, existingSession, existingRecords, history } = await withRls(user.id, async (tx) => {
+  const { cls, students, existingSession, existingRecords, yesterdayRecords, history } = await withRls(user.id, async (tx) => {
     const cls = await tx.class.findFirst({
       where: { id: classId, institutionId: institution.id },
     });
-    if (!cls) return { cls: null, students: [], existingSession: null, existingRecords: [], history: [] };
+    if (!cls) return { cls: null, students: [], existingSession: null, existingRecords: [], yesterdayRecords: [], history: [] };
 
-    const [students, existingSession] = await Promise.all([
+    const yesterday = new Date(date);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    const [students, existingSession, yesterdaySession] = await Promise.all([
       tx.student.findMany({
         where: { institutionId: institution.id, classId, status: "ACTIVE" },
         orderBy: { fullName: "asc" },
@@ -45,6 +48,10 @@ export default async function AttendanceClassPage({
       tx.attendanceSession.findFirst({
         where: { classId, sessionDate: new Date(date) },
         include: { records: true },
+      }),
+      tx.attendanceSession.findFirst({
+        where: { classId, sessionDate: yesterday },
+        include: { records: { select: { studentId: true, status: true } } },
       }),
     ]);
 
@@ -78,6 +85,7 @@ export default async function AttendanceClassPage({
       students,
       existingSession,
       existingRecords: existingSession?.records ?? [],
+      yesterdayRecords: yesterdaySession?.records ?? [],
       history,
     };
   });
@@ -126,6 +134,7 @@ export default async function AttendanceClassPage({
             date={date}
             students={students}
             existingRecords={existingRecords.map((r: AttendanceRecord) => ({ studentId: r.studentId, status: r.status, note: r.note ?? undefined }))}
+            yesterdayRecords={yesterdayRecords.map(r => ({ studentId: r.studentId, status: r.status }))}
             isEdit={!!existingSession}
             terminology={t}
           />
