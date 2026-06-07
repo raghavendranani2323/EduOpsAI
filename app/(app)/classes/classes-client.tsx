@@ -22,10 +22,10 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { AddTeacherSheet } from "@/components/staff/add-teacher-sheet";
 
 const classSchema = z.object({
-  name:         z.string().min(1, "Class name is required").max(80),
-  academicYear: z.string().min(1, "Academic year is required").max(20),
-  medium:       z.string().max(40).optional(),
-  classHeadId:  z.string().optional(),
+  name:           z.string().min(1, "Class name is required").max(80),
+  academicYearId: z.string().min(1, "Pick an academic year"),
+  medium:         z.string().max(40).optional(),
+  classHeadId:    z.string().optional(),
 });
 type ClassForm = z.infer<typeof classSchema>;
 
@@ -75,12 +75,17 @@ interface EmptyGroupRow {
   boysLeader: Person | null;
 }
 
+interface AcademicYearOption { id: string; name: string; isActive: boolean }
+
 interface Props {
   classes: ClassRow[];
   emptyGroups: EmptyGroupRow[];
   staff: StaffOption[];
   students: StudentOption[];
   institutionType: InstitutionType;
+  academicYears: AcademicYearOption[];
+  activeAcademicYearId: string | null;
+  defaultYearName: string;
 }
 
 interface ClassGroupView {
@@ -90,17 +95,23 @@ interface ClassGroupView {
   sections: ClassRow[];
 }
 
-const DEFAULT_YEAR = "2026-27";
-
 function personName(id: string | null | undefined, people: Array<{ id: string; fullName: string }>) {
   if (!id) return null;
   return people.find((p) => p.id === id)?.fullName ?? null;
 }
 
-export function ClassesClient({ classes, emptyGroups, staff: initialStaff, students, institutionType }: Props) {
+export function ClassesClient({
+  classes, emptyGroups, staff: initialStaff, students, institutionType,
+  academicYears: initialYears, activeAcademicYearId, defaultYearName,
+}: Props) {
   const t = getTerminology(institutionType);
   const router = useRouter();
   const [staff, setStaff] = useState(initialStaff);
+  const [academicYears, setAcademicYears] = useState(initialYears);
+  const [createYearOpen, setCreateYearOpen] = useState(false);
+  const [creatingYear, setCreatingYear] = useState(false);
+  const [yearForm, setYearForm] = useState({ name: defaultYearName });
+  const defaultYearForClasses = activeAcademicYearId ?? academicYears[0]?.id ?? "";
 
   const [classSheetOpen, setClassSheetOpen]       = useState(false);
   const [editingClass, setEditingClass]           = useState<ClassGroupView | null>(null);
@@ -116,7 +127,7 @@ export function ClassesClient({ classes, emptyGroups, staff: initialStaff, stude
 
   const classForm = useForm<ClassForm>({
     resolver: zodResolver(classSchema),
-    defaultValues: { academicYear: DEFAULT_YEAR },
+    defaultValues: { academicYearId: defaultYearForClasses },
   });
   const sectionForm = useForm<SectionForm>({ resolver: zodResolver(sectionSchema) });
   const [classSubmitting, setClassSubmitting] = useState(false);
@@ -169,7 +180,7 @@ export function ClassesClient({ classes, emptyGroups, staff: initialStaff, stude
 
   function openAddClass() {
     setEditingClass(null);
-    classForm.reset({ name: "", academicYear: DEFAULT_YEAR, medium: "", classHeadId: "" });
+    classForm.reset({ name: "", academicYearId: defaultYearForClasses, medium: "", classHeadId: "" });
     setClassSheetOpen(true);
   }
 
@@ -230,7 +241,8 @@ export function ClassesClient({ classes, emptyGroups, staff: initialStaff, stude
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             name: sectionSheetGroup.name,
-            academicYear: sectionSheetGroup.academicYear,
+            classGroupId: sectionSheetGroup.id,
+            academicYearId: academicYears.find(y => y.name === sectionSheetGroup.academicYear)?.id,
             medium: sectionSheetGroup.medium ?? "",
             section: data.section.trim(),
             classHeadId: sectionSheetGroup.classHeadId ?? null,
@@ -302,14 +314,56 @@ export function ClassesClient({ classes, emptyGroups, staff: initialStaff, stude
     router.refresh();
   }
 
+  async function createYearInline() {
+    if (!yearForm.name.match(/^\d{4}-\d{2,4}$/)) {
+      toast.error("Use format YYYY-YY (e.g. 2026-27)");
+      return;
+    }
+    setCreatingYear(true);
+    try {
+      const res = await fetch("/api/academic-years", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: yearForm.name, setActive: academicYears.length === 0 }),
+      });
+      const result = await res.json();
+      if (!result.ok) { toast.error(result.error); return; }
+      const newYear: AcademicYearOption = {
+        id: result.academicYear.id,
+        name: result.academicYear.name,
+        isActive: result.academicYear.isActive,
+      };
+      setAcademicYears(prev => [newYear, ...prev]);
+      classForm.setValue("academicYearId", newYear.id, { shouldValidate: true });
+      setCreateYearOpen(false);
+      toast.success(`Academic year ${newYear.name} added`);
+      router.refresh();
+    } finally {
+      setCreatingYear(false);
+    }
+  }
+
   return (
     <div className="p-4 md:p-6 space-y-5 max-w-5xl">
       {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">{t.classes}</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {grouped.length === 0 ? "No classes yet" : `${grouped.length} class${grouped.length === 1 ? "" : "es"} · ${classes.length} section${classes.length === 1 ? "" : "s"}`}
+          <p className="text-sm text-muted-foreground mt-0.5 flex items-center gap-2 flex-wrap">
+            {(() => {
+              const activeYear = academicYears.find(y => y.id === activeAcademicYearId);
+              return activeYear ? (
+                <a href="/settings/academic-year" className="inline-flex items-center gap-1 text-xs font-semibold rounded-full bg-primary/10 text-primary px-2 py-0.5 hover:bg-primary/15">
+                  {activeYear.name} · Current
+                </a>
+              ) : (
+                <a href="/settings/academic-year" className="inline-flex items-center gap-1 text-xs font-semibold rounded-full bg-amber-100 dark:bg-amber-500/15 text-amber-800 dark:text-amber-200 px-2 py-0.5 hover:bg-amber-200/60">
+                  Set academic year →
+                </a>
+              );
+            })()}
+            <span>·</span>
+            <span>{grouped.length === 0 ? "No classes yet" : `${grouped.length} class${grouped.length === 1 ? "" : "es"} · ${classes.length} section${classes.length === 1 ? "" : "s"}`}</span>
           </p>
         </div>
         <div className="flex gap-2">
@@ -461,14 +515,34 @@ export function ClassesClient({ classes, emptyGroups, staff: initialStaff, stude
               <FieldRow label={`${t.class} name *`} error={classForm.formState.errors.name?.message}>
                 <Input autoFocus placeholder="Class 6" {...classForm.register("name")} />
               </FieldRow>
-              <div className="grid grid-cols-2 gap-3">
-                <FieldRow label="Academic year *" error={classForm.formState.errors.academicYear?.message}>
-                  <Input placeholder={DEFAULT_YEAR} {...classForm.register("academicYear")} />
-                </FieldRow>
-                <FieldRow label="Medium">
-                  <Input placeholder="English" {...classForm.register("medium")} />
-                </FieldRow>
+              <div className="space-y-1.5">
+                <Label>Academic year *</Label>
+                {academicYears.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-border p-3 text-xs text-muted-foreground flex items-center justify-between gap-2">
+                    <span>No academic year set up yet</span>
+                    <Button type="button" size="sm" variant="outline" onClick={() => setCreateYearOpen(true)}>
+                      <Plus /> Add {defaultYearName}
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <Select {...classForm.register("academicYearId")}>
+                      {academicYears.map(y => (
+                        <option key={y.id} value={y.id}>{y.name}{y.isActive ? " · Current" : ""}</option>
+                      ))}
+                    </Select>
+                    <button type="button" onClick={() => setCreateYearOpen(true)} className="text-xs text-primary font-medium hover:underline">
+                      + Create a new academic year
+                    </button>
+                  </>
+                )}
+                {classForm.formState.errors.academicYearId && (
+                  <p className="text-destructive text-xs">{classForm.formState.errors.academicYearId.message}</p>
+                )}
               </div>
+              <FieldRow label="Medium">
+                <Input placeholder="English" {...classForm.register("medium")} />
+              </FieldRow>
 
               <div className="space-y-1.5">
                 <Label>Class Head (optional)</Label>
@@ -694,6 +768,38 @@ export function ClassesClient({ classes, emptyGroups, staff: initialStaff, stude
 
       {/* ───────── ADD TEACHER SHEET ───────── */}
       <AddTeacherSheet open={addTeacherOpen} onOpenChange={setAddTeacherOpen} onCreated={onTeacherCreated} />
+
+      {/* ───────── INLINE CREATE ACADEMIC YEAR SHEET ───────── */}
+      <Sheet open={createYearOpen} onOpenChange={setCreateYearOpen}>
+        <SheetContent side="bottom">
+          <SheetHeader>
+            <SheetTitle>New academic year</SheetTitle>
+            <p className="text-xs text-muted-foreground mt-0.5">Format: YYYY-YY (e.g. 2026-27)</p>
+          </SheetHeader>
+          <SheetBody>
+            <div className="space-y-1.5">
+              <Label>Name *</Label>
+              <Input
+                autoFocus
+                value={yearForm.name}
+                onChange={(e) => setYearForm({ name: e.target.value })}
+                placeholder={defaultYearName}
+              />
+              <p className="text-xs text-muted-foreground">
+                {academicYears.length === 0
+                  ? "This will become the current academic year."
+                  : "Activate it later from Settings → Academic year."}
+              </p>
+            </div>
+          </SheetBody>
+          <SheetFooter className="grid grid-cols-2 gap-2">
+            <Button variant="outline" onClick={() => setCreateYearOpen(false)} disabled={creatingYear}>Cancel</Button>
+            <Button onClick={createYearInline} disabled={creatingYear}>
+              {creatingYear ? "Creating…" : "Create year"}
+            </Button>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

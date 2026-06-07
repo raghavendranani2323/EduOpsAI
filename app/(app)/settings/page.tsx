@@ -1,12 +1,13 @@
 import Link from "next/link";
-import { Users, GraduationCap, Building2, Bell, ChevronRight } from "lucide-react";
+import { Users, GraduationCap, Building2, Bell, ChevronRight, Calendar } from "lucide-react";
 import { SignOutButton } from "@/components/shell/sign-out-button";
 import { LanguageSwitcher } from "@/components/i18n/language-switcher";
 import { PushToggle } from "@/components/notifications/push-toggle";
 
 const SETTINGS_LINKS = [
-  { href: "/settings/team",         icon: Users,         label: "Team & Invitations", desc: "Invite staff and manage roles" },
-  { href: "/classes",               icon: GraduationCap, label: "Classes / Batches",  desc: "Manage your classes" },
+  { href: "/settings/academic-year",icon: Calendar,      label: "Academic year",       desc: "Set the current academic year" },
+  { href: "/settings/team",         icon: Users,         label: "Team & Invitations",  desc: "Invite staff and manage roles" },
+  { href: "/classes",               icon: GraduationCap, label: "Classes / Batches",   desc: "Manage your classes" },
   { href: "/settings/institution",  icon: Building2,     label: "Institution profile", desc: "Update institution details" },
   { href: "/settings/notifications",icon: Bell,          label: "Notifications",       desc: "Push & WhatsApp preferences" },
 ];

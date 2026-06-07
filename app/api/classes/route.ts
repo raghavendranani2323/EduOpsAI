@@ -25,17 +25,17 @@ export async function POST(req: Request) {
       name?: string;
       section?: string;
       academicYear?: string;
+      academicYearId?: string;
       medium?: string;
       classHeadId?: string | null;
       sectionTeacherId?: string | null;
+      classGroupId?: string | null;
     };
 
     if (!body.name?.trim()) return NextResponse.json({ ok: false, error: "Name is required" }, { status: 400 });
-    if (!body.academicYear?.trim()) return NextResponse.json({ ok: false, error: "Academic year is required" }, { status: 400 });
 
     const cls = await withRls(user.id, async (tx) => {
       const name = body.name!.trim();
-      const academicYearName = body.academicYear!.trim();
       const medium = body.medium?.trim() || null;
       const classHeadId = body.classHeadId || null;
       const sectionTeacherId = body.sectionTeacherId || null;
@@ -54,36 +54,42 @@ export async function POST(req: Request) {
         if (!teacher) throw new Error("Section Class Teacher must be a staff member in this institution");
       }
 
-      const academicYear = await tx.academicYear.upsert({
-        where: { institutionId_name: { institutionId: institution.id, name: academicYearName } },
-        create: { institutionId: institution.id, name: academicYearName },
-        update: {},
+      const { resolveAcademicYearTx } = await import("@/lib/tenant/academic-year");
+      const academicYear = await resolveAcademicYearTx(tx, institution.id, {
+        academicYearId: body.academicYearId ?? null,
+        academicYear:   body.academicYear   ?? null,
       });
 
-      const classGroup = await tx.classGroup.upsert({
-        where: { institutionId_academicYearId_name: { institutionId: institution.id, academicYearId: academicYear.id, name } },
-        create: {
-          institutionId: institution.id,
-          academicYearId: academicYear.id,
-          name,
-          medium,
-          classHeadId,
-        },
-        update: {
-          ...(medium ? { medium } : {}),
-          ...(classHeadId !== null ? { classHeadId } : {}),
-        },
-      });
+      // If a classGroupId is passed, attach the section to that exact class group.
+      // Otherwise upsert a class group by (institution, year, name).
+      const classGroup = body.classGroupId
+        ? await tx.classGroup.findFirstOrThrow({
+            where: { id: body.classGroupId, institutionId: institution.id },
+          })
+        : await tx.classGroup.upsert({
+            where: { institutionId_academicYearId_name: { institutionId: institution.id, academicYearId: academicYear.id, name } },
+            create: {
+              institutionId: institution.id,
+              academicYearId: academicYear.id,
+              name,
+              medium,
+              classHeadId,
+            },
+            update: {
+              ...(medium ? { medium } : {}),
+              ...(classHeadId !== null ? { classHeadId } : {}),
+            },
+          });
 
       return tx.class.create({
         data: {
           institutionId: institution.id,
           classGroupId: classGroup.id,
           academicYearId: academicYear.id,
-          name,
+          name: classGroup.name,
           section: body.section?.trim() || null,
-          medium,
-          academicYear: academicYearName,
+          medium: classGroup.medium ?? medium,
+          academicYear: academicYear.name, // legacy string mirror, kept for back-compat
           sectionTeacherId,
         },
       });

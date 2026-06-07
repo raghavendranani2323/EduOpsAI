@@ -2,12 +2,14 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireInstitution } from "@/lib/tenant/current";
 import { withRls } from "@/lib/prisma/rls";
+import { resolveAcademicYearTx } from "@/lib/tenant/academic-year";
 
 const schema = z.object({
-  name:          z.string().min(1, "Name is required").max(80),
-  academicYear:  z.string().min(1, "Academic year is required").max(20),
-  medium:        z.string().max(40).optional().or(z.literal("")),
-  classHeadId:   z.string().optional().or(z.literal("")),
+  name:           z.string().min(1, "Name is required").max(80),
+  academicYearId: z.string().optional().or(z.literal("")),
+  academicYear:   z.string().max(20).optional().or(z.literal("")),
+  medium:         z.string().max(40).optional().or(z.literal("")),
+  classHeadId:    z.string().optional().or(z.literal("")),
 });
 
 // POST /api/class-groups  — create a class (e.g. "Class 6") without any section yet
@@ -23,13 +25,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: parsed.error.issues[0]?.message }, { status: 400 });
     }
 
-    const { name, academicYear, medium, classHeadId } = parsed.data;
+    const { name, academicYearId, academicYear, medium, classHeadId } = parsed.data;
 
     const group = await withRls(user.id, async (tx) => {
-      const year = await tx.academicYear.upsert({
-        where: { institutionId_name: { institutionId: institution.id, name: academicYear.trim() } },
-        create: { institutionId: institution.id, name: academicYear.trim() },
-        update: {},
+      const year = await resolveAcademicYearTx(tx, institution.id, {
+        academicYearId: academicYearId || null,
+        academicYear:   academicYear   || null,
       });
 
       if (classHeadId) {

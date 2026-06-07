@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { prismaAdmin as prisma } from "@/lib/prisma/admin";
 import type { InstitutionType } from "@prisma/client";
+import { defaultAcademicYearName } from "@/lib/tenant/academic-year";
 
 const schema = z.object({
   name: z.string().min(2),
@@ -48,6 +49,14 @@ export async function POST(req: NextRequest) {
           userId: user.id,
           role: "OWNER",
           acceptedAt: new Date(),
+        },
+      },
+      // Seed an active academic year for the new institution so admins can
+      // create classes immediately without a separate setup step.
+      academicYears: {
+        create: {
+          name: defaultAcademicYearName(),
+          isActive: true,
         },
       },
     },
