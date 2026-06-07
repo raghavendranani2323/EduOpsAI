@@ -14,6 +14,11 @@ export default function LoginPage() {
           Sign up free
         </a>
       </p>
+      <div className="border-t pt-4 text-center">
+        <a href="/parent/login" className="text-xs text-muted-foreground hover:text-primary">
+          Are you a parent? Sign in here →
+        </a>
+      </div>
     </div>
   );
 }
