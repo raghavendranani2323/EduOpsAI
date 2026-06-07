@@ -6,13 +6,14 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
-import { Calendar, Plus, Pencil, Trash2, CheckCircle2, ArrowRight, Sparkles, AlertCircle } from "lucide-react";
+import { Calendar, Plus, Pencil, Trash2, CheckCircle2, ArrowRight, Sparkles, AlertCircle, ArrowUpRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetBody, SheetFooter } from "@/components/ui/sheet";
 import { EmptyState } from "@/components/ui/empty-state";
+import { PromoteSheet } from "./promote-sheet";
 
 const createSchema = z.object({
   name:      z.string().regex(/^\d{4}-\d{2,4}$/, "Use YYYY-YY (e.g. 2026-27)"),
@@ -52,6 +53,7 @@ export function AcademicYearClient({ years, studentCount, defaultName, canEdit }
   const [deleting, setDeleting]       = useState<YearRow | null>(null);
   const [activating, setActivating]   = useState<string | null>(null);
   const [submitting, setSubmitting]   = useState(false);
+  const [promoteOpen, setPromoteOpen] = useState(false);
 
   const createForm = useForm<CreateForm>({
     resolver: zodResolver(createSchema),
@@ -151,9 +153,17 @@ export function AcademicYearClient({ years, studentCount, defaultName, canEdit }
           </p>
         </div>
         {canEdit && (
-          <Button onClick={openCreate} size="md">
-            <Plus /> Add year
-          </Button>
+          <div className="flex gap-2 shrink-0">
+            {years.length >= 2 && (
+              <Button onClick={() => setPromoteOpen(true)} variant="outline" size="md">
+                <ArrowUpRight />
+                <span className="hidden sm:inline">Promote</span>
+              </Button>
+            )}
+            <Button onClick={openCreate} size="md">
+              <Plus /> Add year
+            </Button>
+          </div>
         )}
       </div>
 
@@ -376,6 +386,16 @@ export function AcademicYearClient({ years, studentCount, defaultName, canEdit }
           </SheetFooter>
         </SheetContent>
       </Sheet>
+
+      {/* PROMOTE SHEET */}
+      {years.length >= 2 && (
+        <PromoteSheet
+          open={promoteOpen}
+          onOpenChange={setPromoteOpen}
+          years={years.map(y => ({ id: y.id, name: y.name, isActive: y.isActive }))}
+          defaultFromId={years.find(y => y.isActive)?.id}
+        />
+      )}
     </div>
   );
 }

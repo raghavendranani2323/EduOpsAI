@@ -322,7 +322,7 @@ export function AdmissionsClient({ leads: initial, classes, dueTodayCount }: Pro
   const activeLead  = activeId ? leads.find(l => l.id === activeId) : null;
 
   return (
-    <div className="p-4 md:p-6 space-y-4">
+    <div className="p-4 md:p-6 space-y-4 max-w-full overflow-x-hidden">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -348,7 +348,7 @@ export function AdmissionsClient({ leads: initial, classes, dueTodayCount }: Pro
         onDragStart={(e: DragStartEvent) => setActiveId(String(e.active.id))}
         onDragEnd={onDragEnd}
       >
-        <div className="flex gap-4 overflow-x-auto pb-4">
+        <div className="flex w-full max-w-[calc(100vw-2rem)] md:max-w-full min-w-0 gap-4 overflow-x-auto overscroll-x-contain pb-4">
           {STAGES.map(stage => (
             <KanbanColumn
               key={stage.id}

@@ -18,10 +18,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <InstitutionProvider institution={institution}>
         <div className="flex h-full">
           <Sidebar />
-          <div className="flex-1 flex flex-col min-h-screen">
+          <div className="flex-1 flex flex-col min-h-screen min-w-0 overflow-x-hidden">
             <TopBar institutionName={institution.name} userEmail={user.email} />
             <OfflineIndicator />
-            <main className="flex-1 overflow-y-auto pb-20 md:pb-0">
+            <main className="flex-1 min-w-0 overflow-x-hidden overflow-y-auto pb-20 md:pb-0">
               {children}
             </main>
             <BottomNav />

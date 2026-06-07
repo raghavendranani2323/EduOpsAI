@@ -1,15 +1,24 @@
 {
   "name": "EduOps AI",
   "short_name": "EduOps",
-  "description": "Operations platform for Indian educational institutions",
+  "description": "Operations platform for Indian educational institutions — attendance, fees, exams, parent communication on one screen.",
   "start_url": "/dashboard",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#ffffff",
   "theme_color": "#6366f1",
+  "lang": "en-IN",
+  "dir": "ltr",
+  "categories": ["education", "productivity", "business"],
   "icons": [
-    { "src": "/icon-192.svg", "sizes": "192x192", "type": "image/svg+xml", "purpose": "any maskable" },
-    { "src": "/icon-512.svg", "sizes": "512x512", "type": "image/svg+xml", "purpose": "any maskable" }
+    { "src": "/icon-192.png",          "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png",          "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Mark attendance", "short_name": "Attendance", "url": "/attendance" },
+    { "name": "Fees",            "short_name": "Fees",       "url": "/fees" },
+    { "name": "Students",        "short_name": "Students",   "url": "/students" }
   ]
 }

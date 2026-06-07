@@ -5,17 +5,19 @@ import { usePathname } from "next/navigation";
 import { motion, LayoutGroup } from "framer-motion";
 import { LayoutDashboard, Users, CalendarCheck, IndianRupee, MoreHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/components/i18n/provider";
 
 const NAV_ITEMS = [
-  { href: "/dashboard",    icon: LayoutDashboard, label: "Home"     },
-  { href: "/students",     icon: Users,            label: "Students" },
-  { href: "/attendance",   icon: CalendarCheck,    label: "Mark"     },
-  { href: "/fees",         icon: IndianRupee,      label: "Fees"     },
-  { href: "/more",         icon: MoreHorizontal,   label: "More"     },
-];
+  { href: "/dashboard",    icon: LayoutDashboard, labelKey: "home"     },
+  { href: "/students",     icon: Users,            labelKey: "students" },
+  { href: "/attendance",   icon: CalendarCheck,    labelKey: "mark"     },
+  { href: "/fees",         icon: IndianRupee,      labelKey: "fees"     },
+  { href: "/more",         icon: MoreHorizontal,   labelKey: "more"     },
+] as const;
 
 export function BottomNav() {
   const pathname = usePathname();
+  const { t } = useI18n();
 
   return (
     <nav
@@ -23,8 +25,9 @@ export function BottomNav() {
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
       <LayoutGroup id="bottom-nav">
-        {NAV_ITEMS.map(({ href, icon: Icon, label }) => {
+        {NAV_ITEMS.map(({ href, icon: Icon, labelKey }) => {
           const active = pathname === href || pathname.startsWith(href + "/");
+          const label = t("nav", labelKey);
           return (
             <Link
               key={href}

@@ -35,8 +35,40 @@ export interface Messages {
   settings: {
     institution: string; team: string; classes: string; language: string;
     notifications: string; enableNotifications: string;
+    disableNotifications: string;
     notificationsBlocked: string; notificationsEnabled: string;
     notificationsNotSupported: string; pushNotConfigured: string;
+  };
+  more: {
+    title: string;
+    admissionsDesc: string; examsDesc: string; timetableDesc: string; homeworkDesc: string;
+    noticesDesc: string; communicationsDesc: string; settingsDesc: string;
+  };
+  settingsPage: {
+    title: string;
+    academicYear: string; academicYearDesc: string;
+    teamInvitations: string; teamInvitationsDesc: string;
+    classesBatches: string; classesBatchesDesc: string;
+    institutionProfile: string; institutionProfileDesc: string;
+    notifications: string; notificationsDesc: string;
+    exportData: string; exportDataDesc: string;
+    auditLog: string; auditLogDesc: string;
+    signOutDesc: string;
+  };
+  exportPage: {
+    title: string; description: string;
+    students: string; studentsDesc: string;
+    feeInvoices: string; feeInvoicesDesc: string;
+    attendance: string; attendanceDesc: string;
+    filterByMonth: string; appendMonth: string; privacy: string;
+  };
+  studentForm: {
+    student: string; class: string; title: string; intro: string; basics: string; fullName: string; admissionNo: string;
+    gender: string; select: string; male: string; female: string; other: string;
+    dob: string; guardian: string; guardianName: string; phone: string; relation: string;
+    tags: string; guardianHelp: string; cancel: string; saving: string; save: string;
+    added: string; failed: string; fullNameRequired: string; guardianPhoneRequired: string; guardianNameRequired: string;
+    father: string; mother: string; guardianRelation: string; grandfather: string; grandmother: string; otherRelation: string;
   };
 }
 
@@ -81,10 +113,86 @@ export const en: Messages = {
   },
   settings: {
     institution: "Institution", team: "Team", classes: "Classes", language: "Language",
-    notifications: "Notifications", enableNotifications: "Enable push notifications",
+    notifications: "Notifications", enableNotifications: "Enable push notifications", disableNotifications: "Turn off notifications",
     notificationsBlocked: "Notifications are blocked. Allow in browser settings.",
     notificationsEnabled: "Notifications enabled",
     notificationsNotSupported: "Notifications not supported on this device.",
     pushNotConfigured: "Push notifications are not configured on this server.",
+  },
+  more: {
+    title: "More",
+    admissionsDesc: "Leads pipeline",
+    examsDesc: "Marks & results",
+    timetableDesc: "Class schedule",
+    homeworkDesc: "Assignments",
+    noticesDesc: "Notice board",
+    communicationsDesc: "Templates & messages",
+    settingsDesc: "Team & institution",
+  },
+  settingsPage: {
+    title: "Settings",
+    academicYear: "Academic year",
+    academicYearDesc: "Set the current academic year",
+    teamInvitations: "Team & Invitations",
+    teamInvitationsDesc: "Invite staff and manage roles",
+    classesBatches: "Classes / Batches",
+    classesBatchesDesc: "Manage your classes",
+    institutionProfile: "Institution profile",
+    institutionProfileDesc: "Update institution details",
+    notifications: "Notifications",
+    notificationsDesc: "Push & WhatsApp preferences",
+    exportData: "Export data",
+    exportDataDesc: "Download students, fees, attendance as CSV",
+    auditLog: "Audit log",
+    auditLogDesc: "Who did what, when",
+    signOutDesc: "End this session on this device",
+  },
+  exportPage: {
+    title: "Export data",
+    description: "Download CSV files openable in Excel, Google Sheets, or any tool. UTF-8 encoded.",
+    students: "Students",
+    studentsDesc: "Full student roster with admission no., class, primary guardian and phone.",
+    feeInvoices: "Fee invoices",
+    feeInvoicesDesc: "All invoices with status, paid amount and outstanding balance. Filterable by month.",
+    attendance: "Attendance",
+    attendanceDesc: "Day-by-day attendance records. Append ?month=YYYY-MM&classId=... to filter.",
+    filterByMonth: "Filter by month",
+    appendMonth: "Append ?month=2026-06 to the URL.",
+    privacy: "All exports are scoped to your institution. Personal information is included only for staff who already have access - the same data they see on screen, just in spreadsheet form.",
+  },
+  studentForm: {
+    student: "student",
+    class: "Class",
+    title: "New {student}",
+    intro: "Add basic info - you can edit details later.",
+    basics: "Basics",
+    fullName: "Full name *",
+    admissionNo: "Admission no.",
+    gender: "Gender",
+    select: "Select",
+    male: "Male",
+    female: "Female",
+    other: "Other",
+    dob: "Date of birth",
+    guardian: "Primary guardian",
+    guardianName: "Guardian name",
+    phone: "Phone",
+    relation: "Relation",
+    tags: "Tags",
+    guardianHelp: "Guardians are used for fee reminders, sibling discounts and parent login. Add more later from the student page.",
+    cancel: "Cancel",
+    saving: "Saving...",
+    save: "Save student",
+    added: "{name} added",
+    failed: "Failed",
+    fullNameRequired: "Full name is required",
+    guardianPhoneRequired: "Guardian phone is required when guardian name is entered",
+    guardianNameRequired: "Guardian name is required when phone is entered",
+    father: "Father",
+    mother: "Mother",
+    guardianRelation: "Guardian",
+    grandfather: "Grandfather",
+    grandmother: "Grandmother",
+    otherRelation: "Other",
   },
 };

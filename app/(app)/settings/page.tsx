@@ -1,25 +1,30 @@
 import Link from "next/link";
-import { Users, GraduationCap, Building2, Bell, ChevronRight, Calendar, ShieldCheck } from "lucide-react";
+import { Users, GraduationCap, Building2, Bell, ChevronRight, Calendar, ShieldCheck, Download } from "lucide-react";
 import { SignOutButton } from "@/components/shell/sign-out-button";
 import { LanguageSwitcher } from "@/components/i18n/language-switcher";
 import { PushToggle } from "@/components/notifications/push-toggle";
+import { getLocale } from "@/lib/i18n/locale";
+import { getMessages } from "@/lib/i18n/messages";
 
 const SETTINGS_LINKS = [
-  { href: "/settings/academic-year",icon: Calendar,      label: "Academic year",       desc: "Set the current academic year" },
-  { href: "/settings/team",         icon: Users,         label: "Team & Invitations",  desc: "Invite staff and manage roles" },
-  { href: "/classes",               icon: GraduationCap, label: "Classes / Batches",   desc: "Manage your classes" },
-  { href: "/settings/institution",  icon: Building2,     label: "Institution profile", desc: "Update institution details" },
-  { href: "/settings/notifications",icon: Bell,          label: "Notifications",       desc: "Push & WhatsApp preferences" },
-  { href: "/settings/audit-log",    icon: ShieldCheck,   label: "Audit log",           desc: "Who did what, when" },
-];
+  { href: "/settings/academic-year",icon: Calendar,      labelKey: "academicYear",       descKey: "academicYearDesc" },
+  { href: "/settings/team",         icon: Users,         labelKey: "teamInvitations",    descKey: "teamInvitationsDesc" },
+  { href: "/classes",               icon: GraduationCap, labelKey: "classesBatches",     descKey: "classesBatchesDesc" },
+  { href: "/settings/institution",  icon: Building2,     labelKey: "institutionProfile", descKey: "institutionProfileDesc" },
+  { href: "/settings/notifications",icon: Bell,          labelKey: "notifications",      descKey: "notificationsDesc" },
+  { href: "/settings/export",       icon: Download,      labelKey: "exportData",         descKey: "exportDataDesc" },
+  { href: "/settings/audit-log",    icon: ShieldCheck,   labelKey: "auditLog",           descKey: "auditLogDesc" },
+] as const;
 
-export default function SettingsPage() {
+export default async function SettingsPage() {
+  const messages = getMessages(await getLocale());
+
   return (
     <div className="p-4 md:p-6 space-y-4 max-w-2xl">
-      <h1 className="text-xl font-bold">Settings</h1>
+      <h1 className="text-xl font-bold">{messages.settingsPage.title}</h1>
 
       <div className="space-y-2">
-        {SETTINGS_LINKS.map(({ href, icon: Icon, label, desc }) => (
+        {SETTINGS_LINKS.map(({ href, icon: Icon, labelKey, descKey }) => (
           <Link
             key={href}
             href={href}
@@ -27,8 +32,8 @@ export default function SettingsPage() {
           >
             <Icon className="h-5 w-5 text-primary" />
             <div className="flex-1 min-w-0">
-              <p className="font-medium text-sm">{label}</p>
-              <p className="text-xs text-muted-foreground">{desc}</p>
+              <p className="font-medium text-sm">{messages.settingsPage[labelKey]}</p>
+              <p className="text-xs text-muted-foreground">{messages.settingsPage[descKey]}</p>
             </div>
             <ChevronRight className="h-4 w-4 text-muted-foreground" />
           </Link>

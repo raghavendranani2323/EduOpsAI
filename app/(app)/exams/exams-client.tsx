@@ -18,6 +18,8 @@ interface Props {
   exams:    Exam[];
   classes:  { id: string; name: string }[];
   subjects: { id: string; name: string; classId: string | null }[];
+  academicYears: { id: string; name: string; isActive: boolean }[];
+  activeYearName: string | null;
 }
 
 const schema = z.object({
@@ -30,7 +32,7 @@ const schema = z.object({
 });
 type FormData = z.infer<typeof schema>;
 
-export function ExamsClient({ exams: initial, classes, subjects }: Props) {
+export function ExamsClient({ exams: initial, classes, subjects, academicYears, activeYearName }: Props) {
   const router = useRouter();
   const [exams,   setExams]   = useState(initial);
   const [open,    setOpen]    = useState(false);
@@ -49,7 +51,12 @@ export function ExamsClient({ exams: initial, classes, subjects }: Props) {
     defaultValues: { totalMarks: 100, passingMarks: 35 },
   });
 
-  function openCreate() { setEditing(null); reset({ totalMarks: 100, passingMarks: 35 }); setOpen(true); setError(null); }
+  function openCreate() {
+    setEditing(null);
+    reset({ totalMarks: 100, passingMarks: 35, academicYear: activeYearName ?? "" });
+    setOpen(true);
+    setError(null);
+  }
   function openEdit(e: Exam) {
     setEditing(e);
     reset({ name: e.name, classId: e.classId ?? "", examDate: e.examDate ?? "", totalMarks: e.totalMarks, passingMarks: e.passingMarks, academicYear: e.academicYear ?? "" });
@@ -192,7 +199,25 @@ export function ExamsClient({ exams: initial, classes, subjects }: Props) {
               </div>
               <div>
                 <label className="text-xs font-medium text-muted-foreground">Academic year</label>
-                <input {...register("academicYear")} placeholder="2024-25" className="mt-1 w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" />
+                {academicYears.length > 0 ? (
+                  <select
+                    {...register("academicYear")}
+                    className="mt-1 w-full border rounded-lg px-3 py-2.5 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  >
+                    <option value="">— Use active year —</option>
+                    {academicYears.map(y => (
+                      <option key={y.id} value={y.name}>
+                        {y.name}{y.isActive ? " · Current" : ""}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    {...register("academicYear")}
+                    placeholder="2026-27"
+                    className="mt-1 w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  />
+                )}
               </div>
               {error && <p className="text-destructive text-sm">{error}</p>}
               <div className="flex gap-2 pt-1">

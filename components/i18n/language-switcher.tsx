@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Languages } from "lucide-react";
 import { toast } from "sonner";
 import { useI18n } from "./provider";
-import { LOCALES, type Locale } from "@/lib/i18n/messages";
+import { getMessages, LOCALES, type Locale } from "@/lib/i18n/messages";
 
 export function LanguageSwitcher() {
   const { locale, t } = useI18n();
@@ -19,7 +19,7 @@ export function LanguageSwitcher() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ locale: next }),
     });
-    toast.success(t("common", "saved"));
+    toast.success(getMessages(next).common.saved);
     startTransition(() => router.refresh());
   }
 

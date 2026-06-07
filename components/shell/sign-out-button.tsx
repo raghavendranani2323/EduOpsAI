@@ -5,6 +5,7 @@ import { LogOut } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/browser";
 import { cn } from "@/lib/utils";
+import { useI18n } from "@/components/i18n/provider";
 
 interface SignOutButtonProps {
   className?: string;
@@ -14,6 +15,7 @@ interface SignOutButtonProps {
 export function SignOutButton({ className, variant = "sidebar" }: SignOutButtonProps) {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const { t } = useI18n();
 
   async function signOut() {
     setLoading(true);
@@ -36,8 +38,8 @@ export function SignOutButton({ className, variant = "sidebar" }: SignOutButtonP
       >
         <LogOut className="h-5 w-5 text-primary" />
         <span className="flex-1">
-          <span className="block font-medium text-sm">Sign out</span>
-          <span className="block text-xs text-muted-foreground">End this session on this device</span>
+          <span className="block font-medium text-sm">{t("common", "signOut")}</span>
+          <span className="block text-xs text-muted-foreground">{t("settingsPage", "signOutDesc")}</span>
         </span>
       </button>
     );
@@ -54,7 +56,7 @@ export function SignOutButton({ className, variant = "sidebar" }: SignOutButtonP
       )}
     >
       <LogOut className="h-4 w-4 shrink-0" strokeWidth={2} />
-      {loading ? "Signing out..." : "Sign out"}
+      {loading ? `${t("common", "signOut")}...` : t("common", "signOut")}
     </button>
   );
 }

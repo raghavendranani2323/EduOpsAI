@@ -6,6 +6,7 @@ import { GraduationCap, Menu, LogOut, Settings, Users, IndianRupee, BookOpen, Ca
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetBody } from "@/components/ui/sheet";
 import { createClient } from "@/lib/supabase/browser";
 import { useRouter } from "next/navigation";
+import { useI18n } from "@/components/i18n/provider";
 
 interface TopBarProps {
   institutionName: string;
@@ -13,20 +14,21 @@ interface TopBarProps {
 }
 
 const MORE_LINKS = [
-  { href: "/students",       icon: Users,           label: "Students"       },
-  { href: "/fees",           icon: IndianRupee,     label: "Fees"           },
-  { href: "/exams",          icon: ClipboardList,   label: "Exams"          },
-  { href: "/timetable",      icon: Calendar,        label: "Timetable"      },
-  { href: "/homework",       icon: BookOpen,        label: "Homework"       },
-  { href: "/notices",        icon: Bell,            label: "Notices"        },
-  { href: "/admissions",     icon: UserPlus,        label: "Admissions"     },
-  { href: "/communications", icon: MessageCircle,   label: "Communications" },
-  { href: "/settings",       icon: Settings,        label: "Settings"       },
-];
+  { href: "/students",       icon: Users,           labelKey: "students"       },
+  { href: "/fees",           icon: IndianRupee,     labelKey: "fees"           },
+  { href: "/exams",          icon: ClipboardList,   labelKey: "exams"          },
+  { href: "/timetable",      icon: Calendar,        labelKey: "timetable"      },
+  { href: "/homework",       icon: BookOpen,        labelKey: "homework"       },
+  { href: "/notices",        icon: Bell,            labelKey: "notices"        },
+  { href: "/admissions",     icon: UserPlus,        labelKey: "admissions"     },
+  { href: "/communications", icon: MessageCircle,   labelKey: "communications" },
+  { href: "/settings",       icon: Settings,        labelKey: "settings"       },
+] as const;
 
 export function TopBar({ institutionName, userEmail }: TopBarProps) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
+  const { t } = useI18n();
 
   async function signOut() {
     const supabase = createClient();
@@ -70,7 +72,7 @@ export function TopBar({ institutionName, userEmail }: TopBarProps) {
           </SheetHeader>
           <SheetBody>
             <div className="grid grid-cols-3 gap-2">
-              {MORE_LINKS.map(({ href, icon: Icon, label }) => (
+              {MORE_LINKS.map(({ href, icon: Icon, labelKey }) => (
                 <Link
                   key={href}
                   href={href}
@@ -80,7 +82,7 @@ export function TopBar({ institutionName, userEmail }: TopBarProps) {
                   <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
                     <Icon className="h-5 w-5 text-primary" />
                   </div>
-                  <span className="text-[11px] font-semibold text-center leading-tight">{label}</span>
+                  <span className="text-[11px] font-semibold text-center leading-tight">{t("nav", labelKey)}</span>
                 </Link>
               ))}
             </div>
@@ -89,7 +91,7 @@ export function TopBar({ institutionName, userEmail }: TopBarProps) {
               className="mt-5 w-full flex items-center justify-center gap-2 border border-destructive/30 text-destructive rounded-xl py-3 text-sm font-semibold hover:bg-destructive/10 transition-colors"
             >
               <LogOut className="h-4 w-4" />
-              Sign out
+              {t("common", "signOut")}
             </button>
           </SheetBody>
         </SheetContent>

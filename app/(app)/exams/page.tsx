@@ -10,8 +10,8 @@ type ExamRow = Prisma.ExamGetPayload<{
 export default async function ExamsPage() {
   const { user, institution } = await requireInstitution();
 
-  const { exams, classes, subjects } = await withRls(user.id, async (tx) => {
-    const [exams, classes, subjects] = await Promise.all([
+  const { exams, classes, subjects, academicYears, activeYearName } = await withRls(user.id, async (tx) => {
+    const [exams, classes, subjects, years] = await Promise.all([
       tx.exam.findMany({
         where: { institutionId: institution.id },
         include: { class: { select: { name: true } }, _count: { select: { results: true } } },
@@ -19,13 +19,18 @@ export default async function ExamsPage() {
       }),
       tx.class.findMany({
         where: { institutionId: institution.id },
-        orderBy: { name: "asc" },
-        select: { id: true, name: true },
+        orderBy: [{ name: "asc" }, { section: "asc" }],
+        select: { id: true, name: true, section: true },
       }),
       tx.subject.findMany({
         where: { institutionId: institution.id },
         orderBy: { name: "asc" },
         select: { id: true, name: true, classId: true },
+      }),
+      tx.academicYear.findMany({
+        where: { institutionId: institution.id },
+        orderBy: { name: "desc" },
+        select: { id: true, name: true, isActive: true },
       }),
     ]);
 
@@ -41,10 +46,23 @@ export default async function ExamsPage() {
         academicYear: e.academicYear,
         resultCount:  e._count.results,
       })),
-      classes,
+      classes: classes.map(c => ({
+        id: c.id,
+        name: c.section ? `${c.name} – ${c.section}` : c.name,
+      })),
       subjects,
+      academicYears: years,
+      activeYearName: years.find(y => y.isActive)?.name ?? null,
     };
   });
 
-  return <ExamsClient exams={exams} classes={classes} subjects={subjects} />;
+  return (
+    <ExamsClient
+      exams={exams}
+      classes={classes}
+      subjects={subjects}
+      academicYears={academicYears}
+      activeYearName={activeYearName}
+    />
+  );
 }

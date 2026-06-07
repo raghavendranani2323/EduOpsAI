@@ -142,7 +142,7 @@ export function PushToggle() {
           disabled={busy}
           className="tap w-full border border-destructive/30 text-destructive rounded-xl py-2.5 text-sm font-semibold disabled:opacity-60"
         >
-          {busy ? "…" : t("common", "signOut")}
+          {busy ? "..." : t("settings", "disableNotifications")}
         </button>
       )}
     </div>

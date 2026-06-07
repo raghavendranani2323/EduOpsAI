@@ -9,23 +9,25 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SignOutButton } from "@/components/shell/sign-out-button";
+import { useI18n } from "@/components/i18n/provider";
 
 const NAV_ITEMS = [
-  { href: "/dashboard",      icon: LayoutDashboard, label: "Dashboard"      },
-  { href: "/students",       icon: Users,           label: "Students"       },
-  { href: "/attendance",     icon: CalendarCheck,   label: "Attendance"     },
-  { href: "/fees",           icon: IndianRupee,     label: "Fees"           },
-  { href: "/exams",          icon: ClipboardList,   label: "Exams"          },
-  { href: "/timetable",      icon: Calendar,        label: "Timetable"      },
-  { href: "/homework",       icon: BookOpen,        label: "Homework"       },
-  { href: "/notices",        icon: Bell,            label: "Notices"        },
-  { href: "/admissions",     icon: UserPlus,        label: "Admissions"     },
-  { href: "/communications", icon: MessageCircle,   label: "Communications" },
-  { href: "/settings",       icon: Settings,        label: "Settings"       },
-];
+  { href: "/dashboard",      icon: LayoutDashboard, labelKey: "dashboard"      },
+  { href: "/students",       icon: Users,           labelKey: "students"       },
+  { href: "/attendance",     icon: CalendarCheck,   labelKey: "attendance"     },
+  { href: "/fees",           icon: IndianRupee,     labelKey: "fees"           },
+  { href: "/exams",          icon: ClipboardList,   labelKey: "exams"          },
+  { href: "/timetable",      icon: Calendar,        labelKey: "timetable"      },
+  { href: "/homework",       icon: BookOpen,        labelKey: "homework"       },
+  { href: "/notices",        icon: Bell,            labelKey: "notices"        },
+  { href: "/admissions",     icon: UserPlus,        labelKey: "admissions"     },
+  { href: "/communications", icon: MessageCircle,   labelKey: "communications" },
+  { href: "/settings",       icon: Settings,        labelKey: "settings"       },
+] as const;
 
 export function Sidebar() {
   const pathname = usePathname();
+  const { t } = useI18n();
 
   return (
     <aside className="hidden md:flex flex-col w-60 border-r border-border bg-[var(--surface-1)] shrink-0 h-screen sticky top-0">
@@ -37,8 +39,9 @@ export function Sidebar() {
       </div>
 
       <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
-        {NAV_ITEMS.map(({ href, icon: Icon, label }) => {
+        {NAV_ITEMS.map(({ href, icon: Icon, labelKey }) => {
           const active = pathname === href || pathname.startsWith(href + "/");
+          const label = t("nav", labelKey);
           return (
             <Link
               key={href}

@@ -7,6 +7,7 @@ import { Users, BookOpen, AlertCircle, UserPlus, TrendingUp, Clock, ArrowRight }
 import { Card } from "@/components/ui/card";
 import { getTeacherClassIds } from "@/lib/tenant/teacher-scope";
 import { TeacherDashboard } from "./teacher-dashboard";
+import { OnboardingChecklist } from "./onboarding-checklist";
 
 function greeting(): string {
   const h = new Date(Date.now() + 5.5 * 60 * 60 * 1000).getUTCHours();
@@ -79,13 +80,15 @@ export default async function DashboardPage() {
     const isTeacher = membership.role === "TEACHER";
     const trendStart = new Date(y, m - 7, 1);
 
-    // Single round-trip: all KPIs + the 6-month trend in one query.
+    // Single round-trip: all KPIs + onboarding flags + the 6-month trend.
     const [agg, feeByMonth] = await Promise.all([
       tx.$queryRaw<Array<{
         total_students: bigint; active_students: bigint;
         unmarked_today: bigint; overdue_invoices: bigint;
         fee_collected: bigint | null; outstanding: bigint | null;
         hot_leads: bigint; followups_due: bigint;
+        has_academic_year: boolean; has_teacher: boolean; has_class: boolean;
+        has_student: boolean; has_attendance: boolean; has_fee_plan: boolean;
       }>>`
         SELECT
           (SELECT COUNT(*) FROM students WHERE "institutionId" = ${institution.id})::bigint AS total_students,
@@ -109,7 +112,13 @@ export default async function DashboardPage() {
           (CASE WHEN ${isTeacher}::bool THEN 0
              ELSE (SELECT COUNT(*) FROM leads WHERE "institutionId" = ${institution.id}
                      AND "nextFollowupAt" <= ${todayDt} AND stage NOT IN ('CONVERTED','LOST'))
-           END)::bigint AS followups_due
+           END)::bigint AS followups_due,
+          EXISTS (SELECT 1 FROM academic_years WHERE "institutionId" = ${institution.id} AND "isActive" = TRUE) AS has_academic_year,
+          EXISTS (SELECT 1 FROM memberships WHERE "institutionId" = ${institution.id} AND role = 'TEACHER' AND "revokedAt" IS NULL) AS has_teacher,
+          EXISTS (SELECT 1 FROM classes WHERE "institutionId" = ${institution.id}) AS has_class,
+          EXISTS (SELECT 1 FROM students WHERE "institutionId" = ${institution.id} AND status = 'ACTIVE') AS has_student,
+          EXISTS (SELECT 1 FROM attendance_sessions WHERE "institutionId" = ${institution.id}) AS has_attendance,
+          EXISTS (SELECT 1 FROM fee_plans WHERE "institutionId" = ${institution.id}) AS has_fee_plan
       `,
       isTeacher ? Promise.resolve([] as Array<{ month: string; total: bigint }>) : tx.$queryRaw<{ month: string; total: bigint }[]>`
         SELECT to_char(date_trunc('month', "paidAt" AT TIME ZONE 'Asia/Kolkata'), 'YYYY-MM') AS month,
@@ -132,6 +141,14 @@ export default async function DashboardPage() {
       followupsDue:    Number(row.followups_due),
       trend:           feeByMonth.map(r => ({ month: r.month, total: Number(r.total) })),
       isTeacher,
+      onboarding: {
+        hasAcademicYear: row.has_academic_year,
+        hasTeacher:      row.has_teacher,
+        hasClass:        row.has_class,
+        hasStudent:      row.has_student,
+        hasAttendance:   row.has_attendance,
+        hasFeePlan:      row.has_fee_plan,
+      },
     };
   });
 
@@ -157,6 +174,15 @@ export default async function DashboardPage() {
         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{institution.name}</p>
         <h1 className="text-[28px] leading-tight font-bold tracking-tight">{greeting()}</h1>
       </div>
+
+      <OnboardingChecklist
+        hasAcademicYear={data.onboarding.hasAcademicYear}
+        hasTeacher={data.onboarding.hasTeacher}
+        hasClass={data.onboarding.hasClass}
+        hasStudent={data.onboarding.hasStudent}
+        hasAttendance={data.onboarding.hasAttendance}
+        hasFeePlan={data.onboarding.hasFeePlan}
+      />
 
       {(data.unmarkedToday > 0 || data.overdueInvoices > 0 || data.followupsDue > 0) && (
         <div className="space-y-3">

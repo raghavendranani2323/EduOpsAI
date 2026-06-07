@@ -1,0 +1,31 @@
+/**
+ * Render an array of records to a CSV blob string. Each record is an object
+ * with the columns you want in the output — order is preserved from the first
+ * record's keys. Values that contain commas, quotes or newlines are quoted.
+ */
+function csvEscape(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  const s = String(value);
+  if (/[",\r\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+export function toCSV(rows: Array<Record<string, unknown>>, columns?: string[]): string {
+  if (rows.length === 0) return columns ? columns.join(",") + "\n" : "";
+  const cols = columns ?? Object.keys(rows[0]);
+  const header = cols.join(",");
+  const body = rows.map(r => cols.map(c => csvEscape(r[c])).join(",")).join("\n");
+  return `${header}\n${body}\n`;
+}
+
+/** Build a Response that browsers will offer as a file download. */
+export function csvResponse(rows: Array<Record<string, unknown>>, filename: string, columns?: string[]): Response {
+  const body = toCSV(rows, columns);
+  return new Response(body, {
+    headers: {
+      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Disposition": `attachment; filename="${filename.replace(/[^\w.-]/g, "_")}"`,
+      "Cache-Control": "no-store",
+    },
+  });
+}
