@@ -3,7 +3,8 @@ import { requireInstitution } from "@/lib/tenant/current";
 import { withRls } from "@/lib/prisma/rls";
 import { formatINR } from "@/lib/format/currency";
 import { todayIST } from "@/lib/format/date";
-import { Users, BookOpen, AlertCircle, UserPlus, TrendingUp, Clock } from "lucide-react";
+import { Users, BookOpen, AlertCircle, UserPlus, TrendingUp, Clock, ArrowRight } from "lucide-react";
+import { Card } from "@/components/ui/card";
 
 function greeting(): string {
   const h = new Date(Date.now() + 5.5 * 60 * 60 * 1000).getUTCHours();
@@ -124,9 +125,9 @@ export default async function DashboardPage() {
   };
 
   return (
-    <div className="p-4 md:p-6 space-y-5 max-w-2xl">
+    <div className="p-4 md:p-6 space-y-5 max-w-2xl animate-fade-in">
       <div>
-        <h1 className="text-xl font-bold">{greeting()}</h1>
+        <h1 className="text-2xl font-bold tracking-tight">{greeting()}</h1>
         <p className="text-muted-foreground text-sm mt-0.5">{institution.name}</p>
       </div>
 
@@ -135,51 +136,31 @@ export default async function DashboardPage() {
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Action needed</p>
           <div className="space-y-2">
             {data.unmarkedToday > 0 && (
-              <Link
+              <ActionLink
                 href="/attendance"
-                className="flex items-center gap-3 border border-amber-200 bg-amber-50 rounded-xl p-3.5 hover:bg-amber-100 transition-colors"
-              >
-                <BookOpen className="h-5 w-5 text-amber-600 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-amber-900">
-                    {data.unmarkedToday} class{data.unmarkedToday > 1 ? "es" : ""} not marked today
-                  </p>
-                  <p className="text-xs text-amber-700">Mark attendance now</p>
-                </div>
-                <span className="text-amber-600 text-xs">-&gt;</span>
-              </Link>
+                icon={BookOpen}
+                tone="amber"
+                title={`${data.unmarkedToday} class${data.unmarkedToday > 1 ? "es" : ""} not marked today`}
+                subtitle="Mark attendance now"
+              />
             )}
-
             {data.overdueInvoices > 0 && !data.isTeacher && (
-              <Link
+              <ActionLink
                 href="/fees?status=OVERDUE"
-                className="flex items-center gap-3 border border-red-200 bg-red-50 rounded-xl p-3.5 hover:bg-red-100 transition-colors"
-              >
-                <AlertCircle className="h-5 w-5 text-red-600 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-red-900">
-                    {data.overdueInvoices} overdue invoice{data.overdueInvoices > 1 ? "s" : ""}
-                  </p>
-                  <p className="text-xs text-red-700">View and collect</p>
-                </div>
-                <span className="text-red-600 text-xs">-&gt;</span>
-              </Link>
+                icon={AlertCircle}
+                tone="red"
+                title={`${data.overdueInvoices} overdue invoice${data.overdueInvoices > 1 ? "s" : ""}`}
+                subtitle="View and collect"
+              />
             )}
-
             {data.followupsDue > 0 && !data.isTeacher && (
-              <Link
+              <ActionLink
                 href="/admissions"
-                className="flex items-center gap-3 border border-blue-200 bg-blue-50 rounded-xl p-3.5 hover:bg-blue-100 transition-colors"
-              >
-                <Clock className="h-5 w-5 text-blue-600 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-blue-900">
-                    {data.followupsDue} follow-up{data.followupsDue > 1 ? "s" : ""} due
-                  </p>
-                  <p className="text-xs text-blue-700">Check admissions pipeline</p>
-                </div>
-                <span className="text-blue-600 text-xs">-&gt;</span>
-              </Link>
+                icon={Clock}
+                tone="blue"
+                title={`${data.followupsDue} follow-up${data.followupsDue > 1 ? "s" : ""} due`}
+                subtitle="Check admissions pipeline"
+              />
             )}
           </div>
         </div>
@@ -187,63 +168,17 @@ export default async function DashboardPage() {
 
       {!data.isTeacher && (
         <div className="grid grid-cols-2 gap-3">
-          <div className="border rounded-xl p-4 space-y-1">
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <Users className="h-4 w-4" />
-              <span className="text-xs">Active students</span>
-            </div>
-            <p className="text-2xl font-bold">{data.activeStudents}</p>
-            <p className="text-xs text-muted-foreground">{data.totalStudents} total</p>
-          </div>
-
-          <div className="border rounded-xl p-4 space-y-1">
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <TrendingUp className="h-4 w-4" />
-              <span className="text-xs">Collected this month</span>
-            </div>
-            <p className="text-xl font-bold text-green-700">{formatINR(data.feeCollected)}</p>
-            {data.feeOutstanding > 0 && (
-              <p className="text-xs text-amber-600">{formatINR(data.feeOutstanding)} pending</p>
-            )}
-          </div>
-
-          <div className="border rounded-xl p-4 space-y-1">
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <UserPlus className="h-4 w-4" />
-              <span className="text-xs">Hot leads</span>
-            </div>
-            <p className="text-2xl font-bold text-red-600">{data.hotLeads}</p>
-            <p className="text-xs text-muted-foreground">in pipeline</p>
-          </div>
-
-          <div className="border rounded-xl p-4 space-y-1">
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <AlertCircle className="h-4 w-4" />
-              <span className="text-xs">Overdue fees</span>
-            </div>
-            <p className="text-2xl font-bold text-destructive">{data.overdueInvoices}</p>
-            <p className="text-xs text-muted-foreground">invoices</p>
-          </div>
+          <Kpi icon={Users}      label="Active students"      value={String(data.activeStudents)} hint={`${data.totalStudents} total`} />
+          <Kpi icon={TrendingUp} label="Collected this month" value={formatINR(data.feeCollected)} hint={data.feeOutstanding > 0 ? `${formatINR(data.feeOutstanding)} pending` : undefined} valueClass="text-green-700 dark:text-green-300 text-xl" />
+          <Kpi icon={UserPlus}   label="Hot leads"            value={String(data.hotLeads)} hint="in pipeline" valueClass="text-red-600 dark:text-red-400" />
+          <Kpi icon={AlertCircle} label="Overdue fees"         value={String(data.overdueInvoices)} hint="invoices" valueClass="text-destructive" />
         </div>
       )}
 
       {data.isTeacher && (
         <div className="grid grid-cols-2 gap-3">
-          <div className="border rounded-xl p-4 space-y-1">
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <Users className="h-4 w-4" />
-              <span className="text-xs">Active students</span>
-            </div>
-            <p className="text-2xl font-bold">{data.activeStudents}</p>
-          </div>
-          <div className="border rounded-xl p-4 space-y-1">
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <BookOpen className="h-4 w-4" />
-              <span className="text-xs">Classes unmarked</span>
-            </div>
-            <p className="text-2xl font-bold text-amber-600">{data.unmarkedToday}</p>
-            <p className="text-xs text-muted-foreground">today</p>
-          </div>
+          <Kpi icon={Users}    label="Active students" value={String(data.activeStudents)} />
+          <Kpi icon={BookOpen} label="Classes unmarked" value={String(data.unmarkedToday)} hint="today" valueClass="text-amber-600 dark:text-amber-300" />
         </div>
       )}
 
@@ -270,24 +205,59 @@ export default async function DashboardPage() {
       <div className="space-y-2">
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Quick actions</p>
         <div className="grid grid-cols-2 gap-2">
-          <Link href="/attendance" className="border rounded-xl p-3.5 text-sm font-medium hover:bg-muted transition-colors flex items-center gap-2">
-            <BookOpen className="h-4 w-4 text-muted-foreground" /> Attendance
-          </Link>
+          <QuickAction href="/attendance" icon={BookOpen} label="Attendance" />
           {!data.isTeacher && (
             <>
-              <Link href="/fees" className="border rounded-xl p-3.5 text-sm font-medium hover:bg-muted transition-colors flex items-center gap-2">
-                <TrendingUp className="h-4 w-4 text-muted-foreground" /> Fees
-              </Link>
-              <Link href="/students/new" className="border rounded-xl p-3.5 text-sm font-medium hover:bg-muted transition-colors flex items-center gap-2">
-                <Users className="h-4 w-4 text-muted-foreground" /> Add student
-              </Link>
-              <Link href="/admissions" className="border rounded-xl p-3.5 text-sm font-medium hover:bg-muted transition-colors flex items-center gap-2">
-                <UserPlus className="h-4 w-4 text-muted-foreground" /> Admissions
-              </Link>
+              <QuickAction href="/fees" icon={TrendingUp} label="Fees" />
+              <QuickAction href="/students/new" icon={Users} label="Add student" />
+              <QuickAction href="/admissions" icon={UserPlus} label="Admissions" />
             </>
           )}
         </div>
       </div>
     </div>
+  );
+}
+
+const TONE_CLASSES = {
+  amber: "border-amber-200 bg-amber-50 dark:bg-amber-500/10 dark:border-amber-500/30 text-amber-900 dark:text-amber-200",
+  red:   "border-red-200 bg-red-50 dark:bg-red-500/10 dark:border-red-500/30 text-red-900 dark:text-red-200",
+  blue:  "border-blue-200 bg-blue-50 dark:bg-blue-500/10 dark:border-blue-500/30 text-blue-900 dark:text-blue-200",
+} as const;
+
+function ActionLink({ href, icon: Icon, title, subtitle, tone }: { href: string; icon: React.ElementType; title: string; subtitle: string; tone: keyof typeof TONE_CLASSES }) {
+  return (
+    <Link
+      href={href}
+      className={`flex items-center gap-3 border rounded-xl p-3.5 transition-colors active:scale-[0.99] ${TONE_CLASSES[tone]}`}
+    >
+      <Icon className="h-5 w-5 shrink-0 opacity-80" />
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold">{title}</p>
+        <p className="text-xs opacity-80">{subtitle}</p>
+      </div>
+      <ArrowRight className="h-4 w-4 shrink-0 opacity-70" />
+    </Link>
+  );
+}
+
+function Kpi({ icon: Icon, label, value, hint, valueClass }: { icon: React.ElementType; label: string; value: string; hint?: string; valueClass?: string }) {
+  return (
+    <Card className="p-4 space-y-1">
+      <div className="flex items-center gap-2 text-muted-foreground">
+        <Icon className="h-4 w-4" />
+        <span className="text-xs">{label}</span>
+      </div>
+      <p className={`text-2xl font-bold tabular-nums truncate ${valueClass ?? ""}`}>{value}</p>
+      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+    </Card>
+  );
+}
+
+function QuickAction({ href, icon: Icon, label }: { href: string; icon: React.ElementType; label: string }) {
+  return (
+    <Link href={href} className="border rounded-xl p-3.5 text-sm font-medium hover:bg-muted transition-colors active:scale-[0.98] flex items-center gap-2">
+      <Icon className="h-4 w-4 text-primary" /> {label}
+    </Link>
   );
 }
