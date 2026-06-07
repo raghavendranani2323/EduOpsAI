@@ -5,7 +5,11 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Mail, Copy, Check } from "lucide-react";
+import { Mail, Copy, Check, UserPlus, Zap } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input, Select } from "@/components/ui/input";
+import { Card } from "@/components/ui/card";
+import { AddTeacherSheet } from "@/components/staff/add-teacher-sheet";
 
 const schema = z.object({
   email: z.string().email("Enter a valid email"),
@@ -30,6 +34,7 @@ export function TeamPageClient({ canInvite, members, invitations }: Props) {
   const [loading, setLoading] = useState(false);
   const [lastInviteUrl, setLastInviteUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [addTeacherOpen, setAddTeacherOpen] = useState(false);
   const router = useRouter();
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<FormData>({
@@ -65,46 +70,46 @@ export function TeamPageClient({ canInvite, members, invitations }: Props) {
 
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-2xl">
-      <div>
-        <h1 className="text-xl font-bold">Team & Invitations</h1>
-        <p className="text-muted-foreground text-sm mt-0.5">Manage staff and pending invitations</p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Team</h1>
+          <p className="text-muted-foreground text-sm mt-0.5">Manage staff and pending invitations</p>
+        </div>
+        {canInvite && (
+          <Button onClick={() => setAddTeacherOpen(true)} size="md">
+            <UserPlus />
+            Add teacher
+          </Button>
+        )}
       </div>
 
       {canInvite && (
-        <section className="space-y-3 border rounded-xl p-4">
-          <h2 className="font-semibold text-sm">Invite a staff member</h2>
+        <Card className="p-5 space-y-3">
+          <div className="flex items-center gap-2">
+            <Zap className="h-4 w-4 text-muted-foreground" />
+            <h2 className="font-semibold text-sm">Or send an email invitation</h2>
+          </div>
+          <p className="text-xs text-muted-foreground -mt-1">For staff who prefer to sign up themselves with their own password.</p>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
             <div className="grid grid-cols-1 sm:grid-cols-[1fr_140px] gap-2">
-              <input
-                type="email"
-                placeholder="email@example.com"
-                className="border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                {...register("email")}
-              />
-              <select
-                className="border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 bg-background"
-                {...register("role")}
-              >
+              <Input type="email" placeholder="email@example.com" {...register("email")} />
+              <Select {...register("role")}>
                 <option value="ADMIN">Admin</option>
                 <option value="TEACHER">Teacher</option>
                 <option value="ACCOUNTANT">Accountant</option>
-              </select>
+              </Select>
             </div>
             {errors.email && <p className="text-destructive text-xs">{errors.email.message}</p>}
             {error && <p className="text-destructive text-xs">{error}</p>}
-            <button
-              type="submit"
-              disabled={loading}
-              className="bg-primary text-primary-foreground rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-60"
-            >
+            <Button type="submit" disabled={loading} variant="outline" size="md">
               {loading ? "Sending…" : "Send invitation"}
-            </button>
+            </Button>
           </form>
 
           {lastInviteUrl && (
-            <div className="bg-primary/5 border border-primary/20 rounded-lg p-3 space-y-2">
+            <div className="bg-primary/5 border border-primary/20 rounded-xl p-3 space-y-2">
               <p className="text-xs font-medium">Share this link with the invitee:</p>
-              <div className="flex items-center gap-2 bg-background border rounded px-2 py-1.5">
+              <div className="flex items-center gap-2 bg-background border rounded-lg px-2 py-1.5">
                 <code className="text-xs flex-1 truncate">{lastInviteUrl}</code>
                 <button
                   onClick={() => copyLink(lastInviteUrl)}
@@ -116,8 +121,10 @@ export function TeamPageClient({ canInvite, members, invitations }: Props) {
               </div>
             </div>
           )}
-        </section>
+        </Card>
       )}
+
+      <AddTeacherSheet open={addTeacherOpen} onOpenChange={setAddTeacherOpen} onCreated={() => router.refresh()} />
 
       <section className="space-y-3">
         <h2 className="font-semibold text-sm">Team ({members.length})</h2>

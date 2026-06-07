@@ -6,49 +6,61 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { toast } from "sonner";
 import {
-  BookOpen,
-  GraduationCap,
-  Pencil,
-  Plus,
-  ShieldCheck,
-  Trash2,
-  Users,
-  X,
+  BookOpen, ChevronDown, GraduationCap, Pencil, Plus, ShieldCheck,
+  Trash2, Users, UserPlus, Crown, Layers,
 } from "lucide-react";
 import type { InstitutionType } from "@prisma/client";
 import { getTerminology } from "@/lib/i18n/terminology";
+import { Button } from "@/components/ui/button";
+import { Input, Label, Select } from "@/components/ui/input";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetBody, SheetFooter } from "@/components/ui/sheet";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/empty-state";
+import { AddTeacherSheet } from "@/components/staff/add-teacher-sheet";
 
-const schema = z.object({
-  name: z.string().min(1, "Name is required"),
-  section: z.string().optional(),
-  academicYear: z.string().min(1, "Academic year is required"),
-  medium: z.string().optional(),
-  classHeadId: z.string().optional(),
+const classSchema = z.object({
+  name:         z.string().min(1, "Class name is required").max(80),
+  academicYear: z.string().min(1, "Academic year is required").max(20),
+  medium:       z.string().max(40).optional(),
+  classHeadId:  z.string().optional(),
+});
+type ClassForm = z.infer<typeof classSchema>;
+
+const sectionSchema = z.object({
+  section:          z.string().min(1, "Section name is required").max(20),
   sectionTeacherId: z.string().optional(),
 });
-type FormData = z.infer<typeof schema>;
+type SectionForm = z.infer<typeof sectionSchema>;
 
-interface StaffOption {
-  id: string;
-  fullName: string;
-  role: string;
-}
-
-interface StudentOption {
-  id: string;
-  fullName: string;
-  gender: string | null;
-  classId: string | null;
-}
-
-interface Person {
-  id: string;
-  fullName: string;
-  classId?: string | null;
-}
+interface StaffOption { id: string; fullName: string; role: string }
+interface StudentOption { id: string; fullName: string; gender: string | null; classId: string | null }
+interface Person { id: string; fullName: string; classId?: string | null }
 
 interface ClassGroupRow {
+  id: string; name: string; medium: string | null;
+  classHeadId: string | null; classLeaderId: string | null;
+  girlsLeaderId: string | null; boysLeaderId: string | null;
+  academicYear: { id: string; name: string } | null;
+  classHead: Person | null;
+  classLeader: Person | null; girlsLeader: Person | null; boysLeader: Person | null;
+}
+
+interface ClassRow {
+  id: string; name: string; section: string | null; academicYear: string; medium: string | null;
+  classGroupId: string | null; sectionTeacherId: string | null;
+  sectionLeaderId: string | null; girlsLeaderId: string | null; boysLeaderId: string | null;
+  classGroup: ClassGroupRow | null;
+  sectionTeacher: Person | null;
+  sectionLeader: Person | null;
+  girlsLeader: Person | null; boysLeader: Person | null;
+  students: StudentOption[];
+  _count: { students: number };
+}
+
+interface EmptyGroupRow {
   id: string;
   name: string;
   medium: string | null;
@@ -63,72 +75,52 @@ interface ClassGroupRow {
   boysLeader: Person | null;
 }
 
-interface ClassRow {
-  id: string;
-  name: string;
-  section: string | null;
-  academicYear: string;
-  medium: string | null;
-  classGroupId: string | null;
-  sectionTeacherId: string | null;
-  sectionLeaderId: string | null;
-  girlsLeaderId: string | null;
-  boysLeaderId: string | null;
-  classGroup: ClassGroupRow | null;
-  sectionTeacher: Person | null;
-  sectionLeader: Person | null;
-  girlsLeader: Person | null;
-  boysLeader: Person | null;
-  students: StudentOption[];
-  _count: { students: number };
-}
-
 interface Props {
   classes: ClassRow[];
+  emptyGroups: EmptyGroupRow[];
   staff: StaffOption[];
   students: StudentOption[];
   institutionType: InstitutionType;
 }
 
 interface ClassGroupView {
-  key: string;
-  id: string | null;
-  name: string;
-  academicYear: string;
-  medium: string | null;
-  classHeadId: string | null;
-  classLeaderId: string | null;
-  girlsLeaderId: string | null;
-  boysLeaderId: string | null;
+  key: string; id: string | null; name: string; academicYear: string; medium: string | null;
+  classHeadId: string | null; classLeaderId: string | null;
+  girlsLeaderId: string | null; boysLeaderId: string | null;
   sections: ClassRow[];
 }
 
 const DEFAULT_YEAR = "2026-27";
 
 function personName(id: string | null | undefined, people: Array<{ id: string; fullName: string }>) {
-  if (!id) return "Not assigned";
-  return people.find((p) => p.id === id)?.fullName ?? "Not assigned";
+  if (!id) return null;
+  return people.find((p) => p.id === id)?.fullName ?? null;
 }
 
-function displaySection(cls: ClassRow) {
-  return cls.section ? `${cls.name}-${cls.section}` : cls.name;
-}
-
-export function ClassesClient({ classes, staff, students, institutionType }: Props) {
+export function ClassesClient({ classes, emptyGroups, staff: initialStaff, students, institutionType }: Props) {
   const t = getTerminology(institutionType);
   const router = useRouter();
-  const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState<ClassRow | null>(null);
-  const [deleting, setDeleting] = useState<ClassRow | null>(null);
-  const [saving, setSaving] = useState(false);
+  const [staff, setStaff] = useState(initialStaff);
+
+  const [classSheetOpen, setClassSheetOpen]       = useState(false);
+  const [editingClass, setEditingClass]           = useState<ClassGroupView | null>(null);
+  const [sectionSheetGroup, setSectionSheetGroup] = useState<ClassGroupView | null>(null);
+  const [editingSection, setEditingSection]       = useState<ClassRow | null>(null);
+  const [leadershipGroup, setLeadershipGroup]     = useState<ClassGroupView | null>(null);
+  const [leadershipSection, setLeadershipSection] = useState<ClassRow | null>(null);
+  const [deletingSection, setDeletingSection]     = useState<ClassRow | null>(null);
+  const [addTeacherOpen, setAddTeacherOpen]       = useState(false);
+
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [localValues, setLocalValues] = useState<Record<string, string>>({});
-  const [error, setError] = useState<string | null>(null);
 
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<FormData>({
-    resolver: zodResolver(schema),
+  const classForm = useForm<ClassForm>({
+    resolver: zodResolver(classSchema),
     defaultValues: { academicYear: DEFAULT_YEAR },
   });
+  const sectionForm = useForm<SectionForm>({ resolver: zodResolver(sectionSchema) });
+  const [classSubmitting, setClassSubmitting] = useState(false);
+  const [sectionSubmitting, setSectionSubmitting] = useState(false);
 
   const grouped = useMemo<ClassGroupView[]>(() => {
     const map = new Map<string, ClassGroupView>();
@@ -151,546 +143,605 @@ export function ClassesClient({ classes, staff, students, institutionType }: Pro
       }
       map.get(key)!.sections.push(cls);
     }
+    for (const g of emptyGroups) {
+      if (map.has(g.id)) continue;
+      map.set(g.id, {
+        key: g.id,
+        id: g.id,
+        name: g.name,
+        academicYear: g.academicYear?.name ?? "",
+        medium: g.medium,
+        classHeadId: g.classHeadId,
+        classLeaderId: g.classLeaderId,
+        girlsLeaderId: g.girlsLeaderId,
+        boysLeaderId: g.boysLeaderId,
+        sections: [],
+      });
+    }
     return [...map.values()].sort((a, b) =>
       b.academicYear.localeCompare(a.academicYear) || a.name.localeCompare(b.name)
     );
-  }, [classes]);
-
-  function openCreate() {
-    setEditing(null);
-    reset({ name: "", section: "", academicYear: DEFAULT_YEAR, medium: "", classHeadId: "", sectionTeacherId: "" });
-    setOpen(true);
-    setError(null);
-  }
-
-  function openEdit(cls: ClassRow) {
-    setEditing(cls);
-    reset({
-      name: cls.name,
-      section: cls.section ?? "",
-      academicYear: cls.academicYear,
-      medium: cls.medium ?? cls.classGroup?.medium ?? "",
-      classHeadId: cls.classGroup?.classHeadId ?? "",
-      sectionTeacherId: cls.sectionTeacherId ?? "",
-    });
-    setOpen(true);
-    setError(null);
-  }
-
-  function closeModal() {
-    setOpen(false);
-    setEditing(null);
-    setError(null);
-  }
-
-  async function onSubmit(data: FormData) {
-    setSaving(true);
-    setError(null);
-    try {
-      const payload = {
-        ...data,
-        medium: data.medium?.trim() || null,
-        classHeadId: data.classHeadId || null,
-        sectionTeacherId: data.sectionTeacherId || null,
-      };
-      const url = editing ? `/api/classes/${editing.id}` : "/api/classes";
-      const method = editing ? "PATCH" : "POST";
-      const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const result = await res.json();
-      if (!result.ok) {
-        setError(result.error);
-        return;
-      }
-      closeModal();
-      router.refresh();
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function confirmDelete() {
-    if (!deleting) return;
-    setSaving(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/classes/${deleting.id}`, { method: "DELETE" });
-      const result = await res.json();
-      if (!result.ok) {
-        setError(result.error);
-        return;
-      }
-      setDeleting(null);
-      router.refresh();
-    } finally {
-      setSaving(false);
-    }
-  }
+  }, [classes, emptyGroups]);
 
   function fieldValue(key: string, value: string | null | undefined) {
     return localValues[key] ?? value ?? "";
   }
 
-  function rollbackField(key: string, previousValue: string) {
-    setLocalValues((current) => ({ ...current, [key]: previousValue }));
+  function openAddClass() {
+    setEditingClass(null);
+    classForm.reset({ name: "", academicYear: DEFAULT_YEAR, medium: "", classHeadId: "" });
+    setClassSheetOpen(true);
   }
 
-  async function updateGroup(
-    groupId: string | null,
-    field: "classHeadId" | "classLeaderId" | "girlsLeaderId" | "boysLeaderId",
-    value: string | null,
-    previousValue: string
-  ) {
+  function openAddSection(group: ClassGroupView) {
+    setEditingSection(null);
+    sectionForm.reset({ section: "", sectionTeacherId: "" });
+    setSectionSheetGroup(group);
+  }
+
+  function openEditSection(section: ClassRow) {
+    const group = grouped.find(g => g.sections.some(s => s.id === section.id)) ?? null;
+    setEditingSection(section);
+    sectionForm.reset({
+      section: section.section ?? "",
+      sectionTeacherId: section.sectionTeacherId ?? "",
+    });
+    setSectionSheetGroup(group);
+  }
+
+  async function onClassSubmit(data: ClassForm) {
+    setClassSubmitting(true);
+    try {
+      const payload = { ...data, medium: data.medium?.trim() || null, classHeadId: data.classHeadId || null };
+      const res = await fetch("/api/class-groups", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const result = await res.json();
+      if (!result.ok) { toast.error(result.error); return; }
+      toast.success(`${data.name} created`);
+      setClassSheetOpen(false);
+      router.refresh();
+    } finally {
+      setClassSubmitting(false);
+    }
+  }
+
+  async function onSectionSubmit(data: SectionForm) {
+    if (!sectionSheetGroup) return;
+    setSectionSubmitting(true);
+    try {
+      if (editingSection) {
+        const res = await fetch(`/api/classes/${editingSection.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            section: data.section.trim(),
+            sectionTeacherId: data.sectionTeacherId || null,
+          }),
+        });
+        const result = await res.json();
+        if (!result.ok) { toast.error(result.error); return; }
+        toast.success("Section updated");
+      } else {
+        const res = await fetch("/api/classes", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: sectionSheetGroup.name,
+            academicYear: sectionSheetGroup.academicYear,
+            medium: sectionSheetGroup.medium ?? "",
+            section: data.section.trim(),
+            classHeadId: sectionSheetGroup.classHeadId ?? null,
+            sectionTeacherId: data.sectionTeacherId || null,
+          }),
+        });
+        const result = await res.json();
+        if (!result.ok) { toast.error(result.error); return; }
+        toast.success(`Section ${data.section.trim()} added`);
+      }
+      setSectionSheetGroup(null);
+      setEditingSection(null);
+      router.refresh();
+    } finally {
+      setSectionSubmitting(false);
+    }
+  }
+
+  async function confirmDelete() {
+    if (!deletingSection) return;
+    const res = await fetch(`/api/classes/${deletingSection.id}`, { method: "DELETE" });
+    const result = await res.json();
+    if (!result.ok) { toast.error(result.error); return; }
+    toast.success("Section deleted");
+    setDeletingSection(null);
+    router.refresh();
+  }
+
+  async function updateGroup(groupId: string | null, field: "classHeadId" | "classLeaderId" | "girlsLeaderId" | "boysLeaderId", value: string | null, prev: string) {
     if (!groupId) return;
     const key = `group:${groupId}:${field}`;
     setSavingKey(key);
-    setLocalValues((current) => ({ ...current, [key]: value ?? "" }));
-    setError(null);
-    try {
-      const res = await fetch(`/api/class-groups/${groupId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ [field]: value }),
-      });
-      const result = await res.json();
-      if (!result.ok) {
-        rollbackField(key, previousValue);
-        setError(result.error);
-        return;
-      }
-      router.refresh();
-    } finally {
-      setSavingKey(null);
-    }
+    setLocalValues(s => ({ ...s, [key]: value ?? "" }));
+    const res = await fetch(`/api/class-groups/${groupId}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ [field]: value }),
+    });
+    const result = await res.json();
+    setSavingKey(null);
+    if (!result.ok) { setLocalValues(s => ({ ...s, [key]: prev })); toast.error(result.error); return; }
+    router.refresh();
   }
 
-  async function updateSection(
-    sectionId: string,
-    field: "sectionTeacherId" | "sectionLeaderId" | "girlsLeaderId" | "boysLeaderId",
-    value: string | null,
-    previousValue: string
-  ) {
+  async function updateSection(sectionId: string, field: "sectionTeacherId" | "sectionLeaderId" | "girlsLeaderId" | "boysLeaderId", value: string | null, prev: string) {
     const key = `section:${sectionId}:${field}`;
     setSavingKey(key);
-    setLocalValues((current) => ({ ...current, [key]: value ?? "" }));
-    setError(null);
-    try {
-      const res = await fetch(`/api/classes/${sectionId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ [field]: value }),
-      });
-      const result = await res.json();
-      if (!result.ok) {
-        rollbackField(key, previousValue);
-        setError(result.error);
-        return;
-      }
-      router.refresh();
-    } finally {
-      setSavingKey(null);
-    }
+    setLocalValues(s => ({ ...s, [key]: value ?? "" }));
+    const res = await fetch(`/api/classes/${sectionId}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ [field]: value }),
+    });
+    const result = await res.json();
+    setSavingKey(null);
+    if (!result.ok) { setLocalValues(s => ({ ...s, [key]: prev })); toast.error(result.error); return; }
+    router.refresh();
   }
 
   function studentsForGroup(group: ClassGroupView) {
-    const sectionIds = new Set(group.sections.map((section) => section.id));
-    return students.filter((student) => student.classId && sectionIds.has(student.classId));
+    const sectionIds = new Set(group.sections.map(s => s.id));
+    return students.filter(s => s.classId && sectionIds.has(s.classId));
   }
 
   function leaderOptions(source: StudentOption[], gender?: "MALE" | "FEMALE") {
-    const filtered = gender ? source.filter((student) => student.gender === gender) : source;
+    const filtered = gender ? source.filter(s => s.gender === gender) : source;
     return filtered.length ? filtered : source;
   }
 
+  function onTeacherCreated(s: { id: string; fullName: string; role: string }) {
+    setStaff(prev => [...prev, s]);
+    setAddTeacherOpen(false);
+    router.refresh();
+  }
+
   return (
-    <div className="p-4 md:p-6 space-y-4 max-w-5xl">
-      <div className="flex items-center justify-between gap-3">
+    <div className="p-4 md:p-6 space-y-5 max-w-5xl">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold">{t.classes}</h1>
+          <h1 className="text-2xl font-bold tracking-tight">{t.classes}</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            {grouped.length} class groups · {classes.length} sections
+            {grouped.length === 0 ? "No classes yet" : `${grouped.length} class${grouped.length === 1 ? "" : "es"} · ${classes.length} section${classes.length === 1 ? "" : "s"}`}
           </p>
         </div>
-        <button
-          onClick={openCreate}
-          className="flex items-center gap-2 bg-primary text-primary-foreground rounded-lg px-4 py-2.5 text-sm font-medium min-h-[44px]"
-        >
-          <Plus className="h-4 w-4" />
-          Add section
-        </button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="md" onClick={() => setAddTeacherOpen(true)}>
+            <UserPlus />
+            <span className="hidden sm:inline">Add teacher</span>
+          </Button>
+          <Button size="md" onClick={openAddClass}>
+            <Plus />
+            Add class
+          </Button>
+        </div>
       </div>
 
-      {error && (
-        <div className="border border-destructive/30 bg-destructive/10 text-destructive rounded-lg p-3 text-sm">
-          {error}
-        </div>
+      {/* Help banner when staff missing */}
+      {staff.length === 0 && grouped.length === 0 && (
+        <Card className="p-4 border-amber-200 dark:border-amber-500/30 bg-amber-50/50 dark:bg-amber-500/10">
+          <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">Start by adding a teacher</p>
+          <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
+            Once you have a teacher you can assign them as Class Head or Section Class Teacher when you create classes.
+          </p>
+          <Button size="sm" className="mt-3" onClick={() => setAddTeacherOpen(true)}>
+            <UserPlus /> Add your first teacher
+          </Button>
+        </Card>
       )}
 
-      {classes.length === 0 && (
-        <div className="text-center py-16 text-muted-foreground">
-          <Users className="h-12 w-12 mx-auto mb-3 opacity-30" />
-          <p className="font-medium">No {t.classes.toLowerCase()} yet</p>
-          <p className="text-sm">Add your first section to build class leadership.</p>
-        </div>
+      {/* Empty */}
+      {grouped.length === 0 && staff.length > 0 && (
+        <EmptyState
+          icon={GraduationCap}
+          title={`No ${t.classes.toLowerCase()} yet`}
+          description={`Create your first ${t.class.toLowerCase()} — you can add sections to it after.`}
+          action={<Button onClick={openAddClass}><Plus /> Add class</Button>}
+        />
       )}
 
+      {/* Classes list */}
       <div className="space-y-4">
         {grouped.map((group) => {
           const groupStudents = studentsForGroup(group);
-          const totalStudents = group.sections.reduce((sum, section) => sum + section._count.students, 0);
-          const classHeadKey = `group:${group.id}:classHeadId`;
-          const classLeaderKey = `group:${group.id}:classLeaderId`;
-          const classGirlsLeaderKey = `group:${group.id}:girlsLeaderId`;
-          const classBoysLeaderKey = `group:${group.id}:boysLeaderId`;
-          const classHeadValue = fieldValue(classHeadKey, group.classHeadId);
-          const classLeaderValue = fieldValue(classLeaderKey, group.classLeaderId);
-          const classGirlsLeaderValue = fieldValue(classGirlsLeaderKey, group.girlsLeaderId);
-          const classBoysLeaderValue = fieldValue(classBoysLeaderKey, group.boysLeaderId);
+          const totalStudents = group.sections.reduce((sum, s) => sum + s._count.students, 0);
+          const headName = personName(group.classHeadId, staff);
+
           return (
-            <section key={group.key} className="border rounded-lg bg-card overflow-hidden">
-              <div className="p-4 border-b bg-muted/30 space-y-4">
+            <Card key={group.key} className="overflow-hidden">
+              {/* Class header row */}
+              <div className="p-4 md:p-5 border-b border-border bg-[var(--surface-1)]">
                 <div className="flex items-start gap-3">
-                  <div className="h-10 w-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                  <div className="h-11 w-11 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
                     <GraduationCap className="h-5 w-5" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="font-semibold">{group.name}</h2>
-                      <span className="text-xs border rounded-full px-2 py-0.5">{group.academicYear}</span>
-                      {group.medium && <span className="text-xs border rounded-full px-2 py-0.5">{group.medium}</span>}
+                      <h2 className="font-bold text-base tracking-tight">{group.name}</h2>
+                      <Badge variant="outline">{group.academicYear}</Badge>
+                      {group.medium && <Badge variant="secondary">{group.medium}</Badge>}
                     </div>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {group.sections.length} sections · {totalStudents} active students
-                    </p>
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1.5 flex-wrap">
+                      <span>{group.sections.length} section{group.sections.length === 1 ? "" : "s"}</span>
+                      <span>·</span>
+                      <span>{totalStudents} student{totalStudents === 1 ? "" : "s"}</span>
+                      {headName && (
+                        <>
+                          <span>·</span>
+                          <span className="flex items-center gap-1"><ShieldCheck className="h-3 w-3" /> Class Head: {headName}</span>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
 
-                <div className="grid gap-3 md:grid-cols-4">
-                  <SelectField
-                    label="Class Head"
-                    value={classHeadValue}
-                    disabled={!group.id}
-                    saving={savingKey === `group:${group.id}:classHeadId`}
-                    onChange={(value) => updateGroup(group.id, "classHeadId", value || null, classHeadValue)}
-                  >
-                    <option value="">Not assigned</option>
-                    {staff.map((member) => (
-                      <option key={member.id} value={member.id}>{member.fullName} ({member.role.toLowerCase()})</option>
-                    ))}
-                  </SelectField>
-
-                  <SelectField
-                    label="Class Leader"
-                    value={classLeaderValue}
-                    disabled={!group.id || groupStudents.length === 0}
-                    saving={savingKey === `group:${group.id}:classLeaderId`}
-                    onChange={(value) => updateGroup(group.id, "classLeaderId", value || null, classLeaderValue)}
-                  >
-                    <option value="">Not assigned</option>
-                    {groupStudents.map((student) => (
-                      <option key={student.id} value={student.id}>{student.fullName}</option>
-                    ))}
-                  </SelectField>
-
-                  <SelectField
-                    label="Girls Leader"
-                    value={classGirlsLeaderValue}
-                    disabled={!group.id || groupStudents.length === 0}
-                    saving={savingKey === `group:${group.id}:girlsLeaderId`}
-                    onChange={(value) => updateGroup(group.id, "girlsLeaderId", value || null, classGirlsLeaderValue)}
-                  >
-                    <option value="">Not assigned</option>
-                    {leaderOptions(groupStudents, "FEMALE").map((student) => (
-                      <option key={student.id} value={student.id}>{student.fullName}</option>
-                    ))}
-                  </SelectField>
-
-                  <SelectField
-                    label="Boys Leader"
-                    value={classBoysLeaderValue}
-                    disabled={!group.id || groupStudents.length === 0}
-                    saving={savingKey === `group:${group.id}:boysLeaderId`}
-                    onChange={(value) => updateGroup(group.id, "boysLeaderId", value || null, classBoysLeaderValue)}
-                  >
-                    <option value="">Not assigned</option>
-                    {leaderOptions(groupStudents, "MALE").map((student) => (
-                      <option key={student.id} value={student.id}>{student.fullName}</option>
-                    ))}
-                  </SelectField>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button size="sm" variant="outline" onClick={() => openAddSection(group)}>
+                    <Plus /> Section
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => setLeadershipGroup(group)}>
+                    <Crown /> Leadership
+                  </Button>
                 </div>
               </div>
 
-              <div className="divide-y">
-                {group.sections.map((section) => {
-                  const sectionTeacherKey = `section:${section.id}:sectionTeacherId`;
-                  const sectionLeaderKey = `section:${section.id}:sectionLeaderId`;
-                  const sectionGirlsLeaderKey = `section:${section.id}:girlsLeaderId`;
-                  const sectionBoysLeaderKey = `section:${section.id}:boysLeaderId`;
-                  const sectionTeacherValue = fieldValue(sectionTeacherKey, section.sectionTeacherId);
-                  const sectionLeaderValue = fieldValue(sectionLeaderKey, section.sectionLeaderId);
-                  const sectionGirlsLeaderValue = fieldValue(sectionGirlsLeaderKey, section.girlsLeaderId);
-                  const sectionBoysLeaderValue = fieldValue(sectionBoysLeaderKey, section.boysLeaderId);
-
-                  return (
-                  <div key={section.id} className="p-4 space-y-3">
-                    <div className="flex items-start gap-3">
-                      <div className="h-9 w-9 rounded-lg bg-muted flex items-center justify-center shrink-0">
-                        <BookOpen className="h-4 w-4 text-muted-foreground" />
+              {/* Sections list */}
+              {group.sections.length === 0 ? (
+                <div className="p-5 text-center">
+                  <p className="text-sm font-medium">No sections yet</p>
+                  <p className="text-xs text-muted-foreground mt-1 mb-3">Add a section like A, B, C, or Morning/Evening.</p>
+                  <Button size="sm" variant="outline" onClick={() => openAddSection(group)}>
+                    <Plus /> Add first section
+                  </Button>
+                </div>
+              ) : (
+                <div className="divide-y divide-border">
+                  {group.sections.map((section) => {
+                    const sectionTeacher = personName(section.sectionTeacherId, staff);
+                    return (
+                      <div key={section.id} className="p-4 md:p-5 flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-xl bg-muted flex items-center justify-center shrink-0">
+                          <Layers className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="font-semibold text-sm">
+                              Section {section.section ?? "—"}
+                            </p>
+                            <Badge variant="secondary">{section._count.students} students</Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {sectionTeacher ? `Class Teacher: ${sectionTeacher}` : "No Class Teacher assigned"}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Button size="iconSm" variant="ghost" onClick={() => setLeadershipSection(section)} aria-label="Leadership">
+                            <Crown />
+                          </Button>
+                          <Button size="iconSm" variant="ghost" onClick={() => openEditSection(section)} aria-label="Edit">
+                            <Pencil />
+                          </Button>
+                          <Button size="iconSm" variant="ghost" onClick={() => setDeletingSection(section)} aria-label="Delete" className="text-destructive hover:bg-destructive/10">
+                            <Trash2 />
+                          </Button>
+                        </div>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm">{displaySection(section)}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {section._count.students} students · Section Class Teacher: {personName(section.sectionTeacherId, staff)}
-                        </p>
-                      </div>
-                      <div className="flex gap-1">
-                        <button
-                          onClick={() => openEdit(section)}
-                          className="p-2 rounded-lg hover:bg-muted min-h-[44px] min-w-[44px] flex items-center justify-center"
-                          aria-label="Edit section"
-                        >
-                          <Pencil className="h-4 w-4 text-muted-foreground" />
-                        </button>
-                        <button
-                          onClick={() => setDeleting(section)}
-                          className="p-2 rounded-lg hover:bg-destructive/10 min-h-[44px] min-w-[44px] flex items-center justify-center"
-                          aria-label="Delete section"
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="grid gap-3 md:grid-cols-4">
-                      <SelectField
-                        label="Section Class Teacher"
-                        value={sectionTeacherValue}
-                        saving={savingKey === `section:${section.id}:sectionTeacherId`}
-                        onChange={(value) => updateSection(section.id, "sectionTeacherId", value || null, sectionTeacherValue)}
-                      >
-                        <option value="">Not assigned</option>
-                        {staff.map((member) => (
-                          <option key={member.id} value={member.id}>{member.fullName} ({member.role.toLowerCase()})</option>
-                        ))}
-                      </SelectField>
-
-                      <SelectField
-                        label="Section Leader"
-                        value={sectionLeaderValue}
-                        disabled={section.students.length === 0}
-                        saving={savingKey === `section:${section.id}:sectionLeaderId`}
-                        onChange={(value) => updateSection(section.id, "sectionLeaderId", value || null, sectionLeaderValue)}
-                      >
-                        <option value="">Not assigned</option>
-                        {section.students.map((student) => (
-                          <option key={student.id} value={student.id}>{student.fullName}</option>
-                        ))}
-                      </SelectField>
-
-                      <SelectField
-                        label="Girls Leader"
-                        value={sectionGirlsLeaderValue}
-                        disabled={section.students.length === 0}
-                        saving={savingKey === `section:${section.id}:girlsLeaderId`}
-                        onChange={(value) => updateSection(section.id, "girlsLeaderId", value || null, sectionGirlsLeaderValue)}
-                      >
-                        <option value="">Not assigned</option>
-                        {leaderOptions(section.students, "FEMALE").map((student) => (
-                          <option key={student.id} value={student.id}>{student.fullName}</option>
-                        ))}
-                      </SelectField>
-
-                      <SelectField
-                        label="Boys Leader"
-                        value={sectionBoysLeaderValue}
-                        disabled={section.students.length === 0}
-                        saving={savingKey === `section:${section.id}:boysLeaderId`}
-                        onChange={(value) => updateSection(section.id, "boysLeaderId", value || null, sectionBoysLeaderValue)}
-                      >
-                        <option value="">Not assigned</option>
-                        {leaderOptions(section.students, "MALE").map((student) => (
-                          <option key={student.id} value={student.id}>{student.fullName}</option>
-                        ))}
-                      </SelectField>
-                    </div>
-                  </div>
-                  );
-                })}
-              </div>
-            </section>
+                    );
+                  })}
+                </div>
+              )}
+            </Card>
           );
         })}
       </div>
 
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-          <div className="absolute inset-0 bg-black/40" onClick={closeModal} />
-          <div className="relative bg-background rounded-t-2xl sm:rounded-lg w-full sm:max-w-md p-5 space-y-4 shadow-xl max-h-[92dvh] overflow-y-auto">
-            <div className="flex items-center justify-between">
-              <h2 className="font-semibold">{editing ? "Edit section" : "New class section"}</h2>
-              <button onClick={closeModal} className="p-1.5 rounded-lg hover:bg-muted">
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
+      {/* ───────── ADD CLASS SHEET ───────── */}
+      <Sheet open={classSheetOpen} onOpenChange={setClassSheetOpen}>
+        <SheetContent side="bottom" className="max-h-[92dvh]">
+          <SheetHeader>
+            <SheetTitle>New class</SheetTitle>
+            <p className="text-xs text-muted-foreground mt-0.5">Just the class — you&apos;ll add sections after.</p>
+          </SheetHeader>
+          <form onSubmit={classForm.handleSubmit(onClassSubmit)} className="flex flex-col flex-1 min-h-0">
+            <SheetBody className="space-y-5">
+              <FieldRow label={`${t.class} name *`} error={classForm.formState.errors.name?.message}>
+                <Input autoFocus placeholder="Class 6" {...classForm.register("name")} />
+              </FieldRow>
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground">{t.class} name *</label>
-                  <input
-                    {...register("name")}
-                    placeholder="Class 6"
-                    className="mt-1 w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  />
-                  {errors.name && <p className="text-destructive text-xs mt-1">{errors.name.message}</p>}
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground">Section</label>
-                  <input
-                    {...register("section")}
-                    placeholder="A"
-                    className="mt-1 w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  />
-                </div>
+                <FieldRow label="Academic year *" error={classForm.formState.errors.academicYear?.message}>
+                  <Input placeholder={DEFAULT_YEAR} {...classForm.register("academicYear")} />
+                </FieldRow>
+                <FieldRow label="Medium">
+                  <Input placeholder="English" {...classForm.register("medium")} />
+                </FieldRow>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground">Academic year *</label>
-                  <input
-                    {...register("academicYear")}
-                    placeholder={DEFAULT_YEAR}
-                    className="mt-1 w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  />
-                  {errors.academicYear && <p className="text-destructive text-xs mt-1">{errors.academicYear.message}</p>}
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground">Medium</label>
-                  <input
-                    {...register("medium")}
-                    placeholder="English"
-                    className="mt-1 w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  />
-                </div>
+              <div className="space-y-1.5">
+                <Label>Class Head (optional)</Label>
+                {staff.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-border p-3 text-xs text-muted-foreground flex items-center justify-between gap-2">
+                    <span>No teachers yet</span>
+                    <Button type="button" size="sm" variant="outline" onClick={() => { setClassSheetOpen(false); setTimeout(() => setAddTeacherOpen(true), 200); }}>
+                      <UserPlus /> Add teacher
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <Select {...classForm.register("classHeadId")}>
+                      <option value="">Not assigned</option>
+                      {staff.map(m => (
+                        <option key={m.id} value={m.id}>{m.fullName} · {m.role.toLowerCase()}</option>
+                      ))}
+                    </Select>
+                    <button type="button" onClick={() => { setClassSheetOpen(false); setTimeout(() => setAddTeacherOpen(true), 200); }} className="text-xs text-primary font-medium hover:underline">
+                      + Add a new teacher
+                    </button>
+                  </>
+                )}
               </div>
+            </SheetBody>
+            <SheetFooter className="grid grid-cols-2 gap-2">
+              <Button type="button" variant="outline" onClick={() => setClassSheetOpen(false)} disabled={classSubmitting}>Cancel</Button>
+              <Button type="submit" disabled={classSubmitting}>{classSubmitting ? "Creating…" : "Create class"}</Button>
+            </SheetFooter>
+          </form>
+        </SheetContent>
+      </Sheet>
 
-              <section className="border rounded-lg p-3 space-y-3">
-                <div className="flex items-center gap-2">
-                  <ShieldCheck className="h-4 w-4 text-primary" />
-                  <h3 className="text-sm font-semibold">Teacher responsibility</h3>
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground">Class Head (all sections)</label>
-                  <select
-                    {...register("classHeadId")}
-                    disabled={staff.length === 0}
-                    className="mt-1 w-full border rounded-lg px-3 py-2.5 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-60"
-                  >
-                    <option value="">Not assigned</option>
-                    {staff.map((member) => (
-                      <option key={member.id} value={member.id}>{member.fullName} ({member.role.toLowerCase()})</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground">Section Class Teacher</label>
-                  <select
-                    {...register("sectionTeacherId")}
-                    disabled={staff.length === 0}
-                    className="mt-1 w-full border rounded-lg px-3 py-2.5 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-60"
-                  >
-                    <option value="">Not assigned</option>
-                    {staff.map((member) => (
-                      <option key={member.id} value={member.id}>{member.fullName} ({member.role.toLowerCase()})</option>
-                    ))}
-                  </select>
-                </div>
-              </section>
+      {/* ───────── ADD / EDIT SECTION SHEET ───────── */}
+      <Sheet open={!!sectionSheetGroup} onOpenChange={(v) => { if (!v) { setSectionSheetGroup(null); setEditingSection(null); } }}>
+        <SheetContent side="bottom" className="max-h-[92dvh]">
+          <SheetHeader>
+            <SheetTitle>
+              {editingSection ? "Edit section" : `Add section to ${sectionSheetGroup?.name ?? ""}`}
+            </SheetTitle>
+            {!editingSection && sectionSheetGroup && (
+              <p className="text-xs text-muted-foreground mt-0.5">Academic year {sectionSheetGroup.academicYear}</p>
+            )}
+          </SheetHeader>
+          <form onSubmit={sectionForm.handleSubmit(onSectionSubmit)} className="flex flex-col flex-1 min-h-0">
+            <SheetBody className="space-y-5">
+              <FieldRow label="Section name *" error={sectionForm.formState.errors.section?.message} hint="Single letter or short label (e.g. A, B, Morning)">
+                <Input autoFocus placeholder="A" {...sectionForm.register("section")} />
+              </FieldRow>
 
-              {error && <p className="text-destructive text-sm">{error}</p>}
-
-              <div className="flex gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={closeModal}
-                  className="flex-1 border rounded-lg py-2.5 text-sm font-medium min-h-[44px]"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="flex-1 bg-primary text-primary-foreground rounded-lg py-2.5 text-sm font-medium disabled:opacity-60 min-h-[44px]"
-                >
-                  {saving ? "Saving..." : editing ? "Save changes" : "Add section"}
-                </button>
+              <div className="space-y-1.5">
+                <Label>Section Class Teacher</Label>
+                {staff.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-border p-3 text-xs text-muted-foreground flex items-center justify-between gap-2">
+                    <span>No teachers yet</span>
+                    <Button type="button" size="sm" variant="outline" onClick={() => { setSectionSheetGroup(null); setTimeout(() => setAddTeacherOpen(true), 200); }}>
+                      <UserPlus /> Add teacher
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <Select {...sectionForm.register("sectionTeacherId")}>
+                      <option value="">Not assigned</option>
+                      {staff.map(m => (
+                        <option key={m.id} value={m.id}>{m.fullName} · {m.role.toLowerCase()}</option>
+                      ))}
+                    </Select>
+                    <button type="button" onClick={() => { setSectionSheetGroup(null); setTimeout(() => setAddTeacherOpen(true), 200); }} className="text-xs text-primary font-medium hover:underline">
+                      + Add a new teacher
+                    </button>
+                  </>
+                )}
               </div>
-            </form>
-          </div>
-        </div>
-      )}
+            </SheetBody>
+            <SheetFooter className="grid grid-cols-2 gap-2">
+              <Button type="button" variant="outline" onClick={() => { setSectionSheetGroup(null); setEditingSection(null); }} disabled={sectionSubmitting}>Cancel</Button>
+              <Button type="submit" disabled={sectionSubmitting}>
+                {sectionSubmitting ? "Saving…" : editingSection ? "Save changes" : "Add section"}
+              </Button>
+            </SheetFooter>
+          </form>
+        </SheetContent>
+      </Sheet>
 
-      {deleting && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setDeleting(null)} />
-          <div className="relative bg-background rounded-t-2xl sm:rounded-lg w-full sm:max-w-sm p-5 space-y-4 shadow-xl">
-            <h2 className="font-semibold">Delete section?</h2>
-            <p className="text-sm text-muted-foreground">
-              <strong>{displaySection(deleting)}</strong> has <strong>{deleting._count.students}</strong> active students. Deleting it will unassign those students.
+      {/* ───────── LEADERSHIP SHEET (group level) ───────── */}
+      <Sheet open={!!leadershipGroup} onOpenChange={(v) => { if (!v) setLeadershipGroup(null); }}>
+        <SheetContent side="bottom" className="max-h-[88dvh]">
+          <SheetHeader>
+            <SheetTitle>{leadershipGroup?.name} · Leadership</SheetTitle>
+            <p className="text-xs text-muted-foreground mt-0.5">Applies to all sections of this class.</p>
+          </SheetHeader>
+          <SheetBody className="space-y-4">
+            {leadershipGroup && (() => {
+              const groupStudents = studentsForGroup(leadershipGroup);
+              const classHeadVal       = fieldValue(`group:${leadershipGroup.id}:classHeadId`, leadershipGroup.classHeadId);
+              const classLeaderVal     = fieldValue(`group:${leadershipGroup.id}:classLeaderId`, leadershipGroup.classLeaderId);
+              const girlsLeaderVal     = fieldValue(`group:${leadershipGroup.id}:girlsLeaderId`, leadershipGroup.girlsLeaderId);
+              const boysLeaderVal      = fieldValue(`group:${leadershipGroup.id}:boysLeaderId`, leadershipGroup.boysLeaderId);
+              return (
+                <>
+                  <LeadershipField
+                    label="Class Head"
+                    description="A teacher who owns this entire class"
+                    icon={ShieldCheck}
+                    value={classHeadVal}
+                    saving={savingKey === `group:${leadershipGroup.id}:classHeadId`}
+                    onChange={(v) => updateGroup(leadershipGroup.id, "classHeadId", v || null, classHeadVal)}
+                    options={staff.map(m => ({ id: m.id, label: `${m.fullName} · ${m.role.toLowerCase()}` }))}
+                    emptyAction={
+                      <button type="button" onClick={() => { setLeadershipGroup(null); setTimeout(() => setAddTeacherOpen(true), 200); }} className="text-xs text-primary font-medium hover:underline">
+                        + Add a new teacher
+                      </button>
+                    }
+                  />
+                  <LeadershipField label="Class Leader" icon={Crown} description="One student to lead the entire class"
+                    value={classLeaderVal}
+                    saving={savingKey === `group:${leadershipGroup.id}:classLeaderId`}
+                    onChange={(v) => updateGroup(leadershipGroup.id, "classLeaderId", v || null, classLeaderVal)}
+                    options={groupStudents.map(s => ({ id: s.id, label: s.fullName }))}
+                    disabledHint={groupStudents.length === 0 ? "Add students before assigning a leader." : undefined}
+                  />
+                  <LeadershipField label="Girls Leader" icon={Crown} description="Female student representative"
+                    value={girlsLeaderVal}
+                    saving={savingKey === `group:${leadershipGroup.id}:girlsLeaderId`}
+                    onChange={(v) => updateGroup(leadershipGroup.id, "girlsLeaderId", v || null, girlsLeaderVal)}
+                    options={leaderOptions(groupStudents, "FEMALE").map(s => ({ id: s.id, label: s.fullName }))}
+                    disabledHint={groupStudents.length === 0 ? "Add students first." : undefined}
+                  />
+                  <LeadershipField label="Boys Leader" icon={Crown} description="Male student representative"
+                    value={boysLeaderVal}
+                    saving={savingKey === `group:${leadershipGroup.id}:boysLeaderId`}
+                    onChange={(v) => updateGroup(leadershipGroup.id, "boysLeaderId", v || null, boysLeaderVal)}
+                    options={leaderOptions(groupStudents, "MALE").map(s => ({ id: s.id, label: s.fullName }))}
+                    disabledHint={groupStudents.length === 0 ? "Add students first." : undefined}
+                  />
+                </>
+              );
+            })()}
+          </SheetBody>
+          <SheetFooter>
+            <Button onClick={() => setLeadershipGroup(null)} className="w-full">Done</Button>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
+
+      {/* ───────── LEADERSHIP SHEET (section level) ───────── */}
+      <Sheet open={!!leadershipSection} onOpenChange={(v) => { if (!v) setLeadershipSection(null); }}>
+        <SheetContent side="bottom" className="max-h-[88dvh]">
+          <SheetHeader>
+            <SheetTitle>{leadershipSection ? `Section ${leadershipSection.section ?? "—"} · Leadership` : ""}</SheetTitle>
+          </SheetHeader>
+          <SheetBody className="space-y-4">
+            {leadershipSection && (() => {
+              const teacherVal = fieldValue(`section:${leadershipSection.id}:sectionTeacherId`, leadershipSection.sectionTeacherId);
+              const sectionLeaderVal = fieldValue(`section:${leadershipSection.id}:sectionLeaderId`, leadershipSection.sectionLeaderId);
+              const sectionGirlsVal  = fieldValue(`section:${leadershipSection.id}:girlsLeaderId`, leadershipSection.girlsLeaderId);
+              const sectionBoysVal   = fieldValue(`section:${leadershipSection.id}:boysLeaderId`, leadershipSection.boysLeaderId);
+              return (
+                <>
+                  <LeadershipField
+                    label="Section Class Teacher" icon={ShieldCheck}
+                    description="The teacher responsible for this section"
+                    value={teacherVal}
+                    saving={savingKey === `section:${leadershipSection.id}:sectionTeacherId`}
+                    onChange={(v) => updateSection(leadershipSection.id, "sectionTeacherId", v || null, teacherVal)}
+                    options={staff.map(m => ({ id: m.id, label: `${m.fullName} · ${m.role.toLowerCase()}` }))}
+                    emptyAction={
+                      <button type="button" onClick={() => { setLeadershipSection(null); setTimeout(() => setAddTeacherOpen(true), 200); }} className="text-xs text-primary font-medium hover:underline">
+                        + Add a new teacher
+                      </button>
+                    }
+                  />
+                  <LeadershipField
+                    label="Section Leader" icon={Crown}
+                    value={sectionLeaderVal}
+                    saving={savingKey === `section:${leadershipSection.id}:sectionLeaderId`}
+                    onChange={(v) => updateSection(leadershipSection.id, "sectionLeaderId", v || null, sectionLeaderVal)}
+                    options={leadershipSection.students.map(s => ({ id: s.id, label: s.fullName }))}
+                    disabledHint={leadershipSection.students.length === 0 ? "Add students to this section first." : undefined}
+                  />
+                  <LeadershipField label="Girls Leader" icon={Crown}
+                    value={sectionGirlsVal}
+                    saving={savingKey === `section:${leadershipSection.id}:girlsLeaderId`}
+                    onChange={(v) => updateSection(leadershipSection.id, "girlsLeaderId", v || null, sectionGirlsVal)}
+                    options={leaderOptions(leadershipSection.students, "FEMALE").map(s => ({ id: s.id, label: s.fullName }))}
+                    disabledHint={leadershipSection.students.length === 0 ? "Add students first." : undefined}
+                  />
+                  <LeadershipField label="Boys Leader" icon={Crown}
+                    value={sectionBoysVal}
+                    saving={savingKey === `section:${leadershipSection.id}:boysLeaderId`}
+                    onChange={(v) => updateSection(leadershipSection.id, "boysLeaderId", v || null, sectionBoysVal)}
+                    options={leaderOptions(leadershipSection.students, "MALE").map(s => ({ id: s.id, label: s.fullName }))}
+                    disabledHint={leadershipSection.students.length === 0 ? "Add students first." : undefined}
+                  />
+                </>
+              );
+            })()}
+          </SheetBody>
+          <SheetFooter>
+            <Button onClick={() => setLeadershipSection(null)} className="w-full">Done</Button>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
+
+      {/* ───────── DELETE SECTION SHEET ───────── */}
+      <Sheet open={!!deletingSection} onOpenChange={(v) => { if (!v) setDeletingSection(null); }}>
+        <SheetContent side="bottom">
+          <SheetHeader>
+            <SheetTitle>Delete section?</SheetTitle>
+          </SheetHeader>
+          <SheetBody>
+            <p className="text-sm">
+              <strong>Section {deletingSection?.section ?? "—"}</strong> of {deletingSection?.classGroup?.name} has{" "}
+              <strong>{deletingSection?._count.students ?? 0}</strong> active students. They will be unassigned.
             </p>
-            {error && <p className="text-destructive text-sm">{error}</p>}
-            <div className="flex gap-2">
-              <button
-                onClick={() => setDeleting(null)}
-                className="flex-1 border rounded-lg py-2.5 text-sm font-medium min-h-[44px]"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmDelete}
-                disabled={saving}
-                className="flex-1 bg-destructive text-destructive-foreground rounded-lg py-2.5 text-sm font-medium disabled:opacity-60 min-h-[44px]"
-              >
-                {saving ? "Deleting..." : "Delete"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          </SheetBody>
+          <SheetFooter className="grid grid-cols-2 gap-2">
+            <Button variant="outline" onClick={() => setDeletingSection(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={confirmDelete}>Delete</Button>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
+
+      {/* ───────── ADD TEACHER SHEET ───────── */}
+      <AddTeacherSheet open={addTeacherOpen} onOpenChange={setAddTeacherOpen} onCreated={onTeacherCreated} />
     </div>
   );
 }
 
-function SelectField({
-  label,
-  value,
-  disabled,
-  saving,
-  onChange,
-  children,
+function FieldRow({ label, children, error, hint }: { label: string; children: ReactNode; error?: string; hint?: string }) {
+  return (
+    <div className="space-y-1.5">
+      <Label>{label}</Label>
+      {children}
+      {error && <p className="text-destructive text-xs">{error}</p>}
+      {hint && !error && <p className="text-xs text-muted-foreground">{hint}</p>}
+    </div>
+  );
+}
+
+function LeadershipField({
+  label, description, icon: Icon, value, saving, onChange, options, disabledHint, emptyAction,
 }: {
   label: string;
+  description?: string;
+  icon: React.ElementType;
   value: string;
-  disabled?: boolean;
   saving?: boolean;
-  onChange: (value: string) => void;
-  children: ReactNode;
+  onChange: (v: string) => void;
+  options: Array<{ id: string; label: string }>;
+  disabledHint?: string;
+  emptyAction?: React.ReactNode;
 }) {
   return (
-    <label className="block">
-      <span className="text-xs font-medium text-muted-foreground">{label}</span>
-      <select
-        value={value}
-        disabled={disabled || saving}
-        onChange={(event) => onChange(event.target.value)}
-        className="mt-1 w-full border rounded-lg px-3 py-2.5 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-60 min-h-[44px]"
-      >
-        {children}
-      </select>
-      {saving && <span className="text-[11px] text-muted-foreground">Saving...</span>}
-    </label>
+    <div className="rounded-2xl border border-border bg-card p-3.5 space-y-2">
+      <div className="flex items-start gap-2.5">
+        <div className="h-8 w-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+          <Icon className="h-4 w-4" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold leading-tight">{label}</p>
+          {description && <p className="text-xs text-muted-foreground mt-0.5">{description}</p>}
+        </div>
+      </div>
+      {options.length === 0 ? (
+        <>
+          <p className="text-xs text-muted-foreground">{disabledHint ?? "No options available."}</p>
+          {emptyAction}
+        </>
+      ) : (
+        <div className="relative">
+          <Select value={value} onChange={(e) => onChange(e.target.value)} disabled={saving}>
+            <option value="">Not assigned</option>
+            {options.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+          </Select>
+          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+          {saving && <p className="text-[11px] text-muted-foreground mt-1">Saving…</p>}
+          {emptyAction}
+        </div>
+      )}
+    </div>
   );
 }
