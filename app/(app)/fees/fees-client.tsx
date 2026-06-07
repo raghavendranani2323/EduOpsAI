@@ -3,9 +3,11 @@
 import { useCallback, useRef, useState } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Search, ChevronRight, MessageCircle, X } from "lucide-react";
+import { Search, ChevronRight, MessageCircle, X, Loader2 } from "lucide-react";
 import { formatINR } from "@/lib/format/currency";
 import { formatDate } from "@/lib/format/date";
+import { useCachedQuery } from "@/lib/offline/use-cached-query";
+import { Input, Select } from "@/components/ui/input";
 
 const STATUSES = [
   { value: "ALL",      label: "All" },
@@ -41,13 +43,40 @@ interface Props {
   currentFilters: { status: string; classId: string; month: string; q: string };
 }
 
-export function FeesClient({ invoices: init, classes, total, currentFilters }: Props) {
+interface InvoicesResponse {
+  invoices: Invoice[];
+  total: number;
+  nextCursor: string | null;
+}
+
+export function FeesClient({ invoices: init, classes, total: initTotal, currentFilters }: Props) {
   const router   = useRouter();
   const pathname = usePathname();
   const sp       = useSearchParams();
-
-  const [invoices] = useState(init);
   const searchRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const queryParams = new URLSearchParams();
+  if (currentFilters.status) queryParams.set("status", currentFilters.status);
+  if (currentFilters.classId) queryParams.set("classId", currentFilters.classId);
+  if (currentFilters.month) queryParams.set("month", currentFilters.month);
+  if (currentFilters.q) queryParams.set("q", currentFilters.q);
+  const qs = queryParams.toString();
+
+  const { data, isFetching } = useCachedQuery<InvoicesResponse>(
+    ["fees", currentFilters.status, currentFilters.classId, currentFilters.month, currentFilters.q],
+    async () => {
+      const res = await fetch(`/api/fees/invoices?${qs}`);
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    {
+      cacheKey: `fees:${qs}`,
+      initialData: { invoices: init, total: initTotal, nextCursor: null },
+    },
+  );
+
+  const invoices = data?.invoices ?? init;
+  const total = data?.total ?? initTotal;
   const [reminders, setReminders] = useState<Array<{ invoiceId: string; studentName: string; guardianName: string | null; guardianPhone: string; amount: number; link: string }>>([]);
   const [sending,    setSending]   = useState(false);
   const [reminderError, setReminderError] = useState<string | null>(null);
@@ -174,33 +203,36 @@ export function FeesClient({ invoices: init, classes, total, currentFilters }: P
       <div className="flex gap-2 flex-wrap">
         <div className="relative flex-1 min-w-[160px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-          <input
+          <Input
             type="search"
             placeholder="Search student…"
             defaultValue={currentFilters.q}
             onChange={e => {
               if (searchRef.current) clearTimeout(searchRef.current);
-              searchRef.current = setTimeout(() => updateFilter("q", e.target.value), 400);
+              searchRef.current = setTimeout(() => updateFilter("q", e.target.value), 350);
             }}
-            className="w-full border rounded-xl pl-9 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 min-h-[44px]"
+            className="pl-9"
           />
+          {isFetching && (
+            <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground animate-spin" />
+          )}
         </div>
 
-        <input
+        <Input
           type="month"
           value={currentFilters.month}
           onChange={e => updateFilter("month", e.target.value)}
-          className="border rounded-xl px-3 py-2.5 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary/50 min-h-[44px]"
+          className="w-auto"
         />
 
-        <select
+        <Select
           value={currentFilters.classId}
           onChange={e => updateFilter("classId", e.target.value)}
-          className="border rounded-xl px-3 py-2.5 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary/50 min-h-[44px]"
+          className="w-auto"
         >
           <option value="">All classes</option>
           {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
+        </Select>
       </div>
 
       {/* Count */}
