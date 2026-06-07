@@ -3,22 +3,31 @@ import { Sidebar } from "@/components/shell/sidebar";
 import { BottomNav } from "@/components/shell/bottom-nav";
 import { TopBar } from "@/components/shell/top-bar";
 import { InstitutionProvider } from "@/components/shell/institution-context";
+import { I18nProvider } from "@/components/i18n/provider";
+import { getLocale } from "@/lib/i18n/locale";
+import { getMessages } from "@/lib/i18n/messages";
+import { OfflineIndicator } from "@/components/shell/offline-indicator";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const { institution, user } = await requireInstitution();
+  const locale = await getLocale();
+  const messages = getMessages(locale);
 
   return (
-    <InstitutionProvider institution={institution}>
-      <div className="flex h-full">
-        <Sidebar />
-        <div className="flex-1 flex flex-col min-h-screen">
-          <TopBar institutionName={institution.name} userEmail={user.email} />
-          <main className="flex-1 overflow-y-auto pb-20 md:pb-0">
-            {children}
-          </main>
-          <BottomNav />
+    <I18nProvider locale={locale} messages={messages}>
+      <InstitutionProvider institution={institution}>
+        <div className="flex h-full">
+          <Sidebar />
+          <div className="flex-1 flex flex-col min-h-screen">
+            <TopBar institutionName={institution.name} userEmail={user.email} />
+            <OfflineIndicator />
+            <main className="flex-1 overflow-y-auto pb-20 md:pb-0">
+              {children}
+            </main>
+            <BottomNav />
+          </div>
         </div>
-      </div>
-    </InstitutionProvider>
+      </InstitutionProvider>
+    </I18nProvider>
   );
 }
