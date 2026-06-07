@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { motion, LayoutGroup } from "framer-motion";
 import { LayoutDashboard, Users, CalendarCheck, IndianRupee, MoreHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
   { href: "/dashboard",    icon: LayoutDashboard, label: "Home"     },
   { href: "/students",     icon: Users,            label: "Students" },
-  { href: "/attendance",   icon: CalendarCheck,    label: "Attend."  },
+  { href: "/attendance",   icon: CalendarCheck,    label: "Mark"     },
   { href: "/fees",         icon: IndianRupee,      label: "Fees"     },
   { href: "/more",         icon: MoreHorizontal,   label: "More"     },
 ];
@@ -18,25 +19,37 @@ export function BottomNav() {
 
   return (
     <nav
-      className="fixed bottom-0 inset-x-0 z-50 bg-background border-t flex md:hidden"
+      className="fixed bottom-0 inset-x-0 z-50 bg-card/95 backdrop-blur-md border-t flex md:hidden"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
-      {NAV_ITEMS.map(({ href, icon: Icon, label }) => {
-        const active = pathname === href || pathname.startsWith(href + "/");
-        return (
-          <Link
-            key={href}
-            href={href}
-            className={cn(
-              "flex-1 flex flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-medium transition-colors",
-              active ? "text-primary" : "text-muted-foreground"
-            )}
-          >
-            <Icon className={cn("h-5 w-5", active && "stroke-[2.5]")} />
-            <span>{label}</span>
-          </Link>
-        );
-      })}
+      <LayoutGroup id="bottom-nav">
+        {NAV_ITEMS.map(({ href, icon: Icon, label }) => {
+          const active = pathname === href || pathname.startsWith(href + "/");
+          return (
+            <Link
+              key={href}
+              href={href}
+              prefetch
+              className="flex-1 relative flex flex-col items-center justify-center gap-1 py-2.5 text-[10px] font-medium"
+            >
+              {active && (
+                <motion.span
+                  layoutId="nav-pill"
+                  className="absolute inset-x-3 top-1 bottom-1 rounded-2xl bg-primary/12"
+                  transition={{ type: "spring", stiffness: 380, damping: 32 }}
+                />
+              )}
+              <Icon
+                className={cn(
+                  "h-5 w-5 relative transition-colors",
+                  active ? "text-primary stroke-[2.4]" : "text-muted-foreground",
+                )}
+              />
+              <span className={cn("relative", active ? "text-primary" : "text-muted-foreground")}>{label}</span>
+            </Link>
+          );
+        })}
+      </LayoutGroup>
     </nav>
   );
 }
