@@ -18,8 +18,11 @@ export default function LoginPage() {
           Create an account
         </a>
       </p>
-      <div className="border-t border-border pt-5 text-center">
-        <a href="/parent/login" className="text-xs text-muted-foreground hover:text-primary font-medium tracking-wide uppercase">
+      <div className="border-t border-border pt-5 text-center space-y-2">
+        <a href="/teacher-login" className="block text-xs text-muted-foreground hover:text-primary font-medium tracking-wide uppercase">
+          Are you a teacher? Sign in with phone →
+        </a>
+        <a href="/parent/login" className="block text-xs text-muted-foreground hover:text-primary font-medium tracking-wide uppercase">
           Are you a parent? Sign in here →
         </a>
       </div>

@@ -383,11 +383,8 @@ export function ClassesClient({ classes, emptyGroups, staff: initialStaff, stude
                 </div>
 
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <Button size="sm" variant="outline" onClick={() => openAddSection(group)}>
-                    <Plus /> Section
-                  </Button>
                   <Button size="sm" variant="ghost" onClick={() => setLeadershipGroup(group)}>
-                    <Crown /> Leadership
+                    <Crown /> Class leadership
                   </Button>
                 </div>
               </div>
@@ -397,45 +394,55 @@ export function ClassesClient({ classes, emptyGroups, staff: initialStaff, stude
                 <div className="p-5 text-center">
                   <p className="text-sm font-medium">No sections yet</p>
                   <p className="text-xs text-muted-foreground mt-1 mb-3">Add a section like A, B, C, or Morning/Evening.</p>
-                  <Button size="sm" variant="outline" onClick={() => openAddSection(group)}>
+                  <Button size="sm" onClick={() => openAddSection(group)}>
                     <Plus /> Add first section
                   </Button>
                 </div>
               ) : (
-                <div className="divide-y divide-border">
-                  {group.sections.map((section) => {
-                    const sectionTeacher = personName(section.sectionTeacherId, staff);
-                    return (
-                      <div key={section.id} className="p-4 md:p-5 flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-xl bg-muted flex items-center justify-center shrink-0">
-                          <Layers className="h-4 w-4 text-muted-foreground" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <p className="font-semibold text-sm">
-                              Section {section.section ?? "—"}
-                            </p>
-                            <Badge variant="secondary">{section._count.students} students</Badge>
+                <>
+                  <div className="divide-y divide-border">
+                    {group.sections.map((section) => {
+                      const sectionTeacher = personName(section.sectionTeacherId, staff);
+                      return (
+                        <div key={section.id} className="p-4 md:p-5 flex items-center gap-3">
+                          <div className="h-10 w-10 rounded-xl bg-muted flex items-center justify-center shrink-0">
+                            <Layers className="h-4 w-4 text-muted-foreground" />
                           </div>
-                          <p className="text-xs text-muted-foreground mt-0.5">
-                            {sectionTeacher ? `Class Teacher: ${sectionTeacher}` : "No Class Teacher assigned"}
-                          </p>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="font-semibold text-sm">
+                                Section {section.section ?? "—"}
+                              </p>
+                              <Badge variant="secondary">{section._count.students} students</Badge>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              {sectionTeacher ? `Class Teacher: ${sectionTeacher}` : "No Class Teacher assigned"}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <Button size="iconSm" variant="ghost" onClick={() => setLeadershipSection(section)} aria-label="Leadership">
+                              <Crown />
+                            </Button>
+                            <Button size="iconSm" variant="ghost" onClick={() => openEditSection(section)} aria-label="Edit">
+                              <Pencil />
+                            </Button>
+                            <Button size="iconSm" variant="ghost" onClick={() => setDeletingSection(section)} aria-label="Delete" className="text-destructive hover:bg-destructive/10">
+                              <Trash2 />
+                            </Button>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-1 shrink-0">
-                          <Button size="iconSm" variant="ghost" onClick={() => setLeadershipSection(section)} aria-label="Leadership">
-                            <Crown />
-                          </Button>
-                          <Button size="iconSm" variant="ghost" onClick={() => openEditSection(section)} aria-label="Edit">
-                            <Pencil />
-                          </Button>
-                          <Button size="iconSm" variant="ghost" onClick={() => setDeletingSection(section)} aria-label="Delete" className="text-destructive hover:bg-destructive/10">
-                            <Trash2 />
-                          </Button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                      );
+                    })}
+                  </div>
+                  {/* Add another section row — always visible at the bottom of a populated list */}
+                  <button
+                    onClick={() => openAddSection(group)}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3.5 text-sm font-semibold text-primary border-t border-dashed border-border hover:bg-primary/5 transition-colors active:scale-[0.99]"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add another section to {group.name}
+                  </button>
+                </>
               )}
             </Card>
           );

@@ -778,3 +778,21 @@ model PushSubscription {
   @@index([userId])
   @@map("push_subscriptions")
 }
+
+// ─────────────────────────────────────────────
+// AUDIT LOG — appendable trail
+// ─────────────────────────────────────────────
+
+model AuditLog {
+  id            String   @id @default(cuid())
+  actorUserId   String
+  institutionId String?
+  action        String
+  targetId      String?
+  meta          Json?
+  createdAt     DateTime @default(now())
+
+  @@index([institutionId, createdAt])
+  @@index([actorUserId])
+  @@map("audit_logs")
+}
