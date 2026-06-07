@@ -2,9 +2,11 @@ import Link from "next/link";
 import { requireInstitution } from "@/lib/tenant/current";
 import { withRls } from "@/lib/prisma/rls";
 import { formatINR } from "@/lib/format/currency";
-import { todayIST } from "@/lib/format/date";
+import { todayIST, formatDateLong } from "@/lib/format/date";
 import { Users, BookOpen, AlertCircle, UserPlus, TrendingUp, Clock, ArrowRight } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { getTeacherClassIds } from "@/lib/tenant/teacher-scope";
+import { TeacherDashboard } from "./teacher-dashboard";
 
 function greeting(): string {
   const h = new Date(Date.now() + 5.5 * 60 * 60 * 1000).getUTCHours();
@@ -17,6 +19,57 @@ export default async function DashboardPage() {
   const { user, institution, membership } = await requireInstitution();
   const today = todayIST();
   const todayDt = new Date(today);
+
+  // Teacher gets a focused, task-shaped dashboard
+  if (membership.role === "TEACHER") {
+    const view = await withRls(user.id, async (tx) => {
+      const ids = await getTeacherClassIds(tx, user.id, institution.id, "TEACHER") ?? [];
+      const classes = await tx.class.findMany({
+        where: { institutionId: institution.id, id: { in: ids.length ? ids : ["__none__"] } },
+        include: {
+          _count: { select: { students: { where: { status: "ACTIVE" } } } },
+          sessions: {
+            where: { sessionDate: todayDt },
+            include: { _count: { select: { records: true } } },
+          },
+        },
+        orderBy: [{ name: "asc" }, { section: "asc" }],
+      });
+      const weekAgo = new Date(todayDt); weekAgo.setDate(weekAgo.getDate() - 7);
+      const [pendingHw, recentNotices] = await Promise.all([
+        tx.homework.count({
+          where: { institutionId: institution.id, teacherId: user.id, createdAt: { gte: weekAgo } },
+        }),
+        tx.notice.count({
+          where: { institutionId: institution.id, createdAt: { gte: weekAgo } },
+        }),
+      ]);
+      return {
+        classesToday: classes.map(c => ({
+          id: c.id,
+          label: c.section ? `${c.name} – ${c.section}` : c.name,
+          studentCount: c._count.students,
+          markedCount: c.sessions[0]?._count.records ?? null,
+        })),
+        pendingHomeworkCount: pendingHw,
+        recentNoticesCount: recentNotices,
+      };
+    });
+
+    // Get teacher's full name from profile
+    const profile = await withRls(user.id, (tx) => tx.profile.findUnique({ where: { id: user.id }, select: { fullName: true } }));
+
+    return (
+      <TeacherDashboard
+        fullName={profile?.fullName ?? "Teacher"}
+        institutionName={institution.name}
+        todayLabel={formatDateLong(today)}
+        classesToday={view.classesToday}
+        pendingHomeworkCount={view.pendingHomeworkCount}
+        recentNoticesCount={view.recentNoticesCount}
+      />
+    );
+  }
 
   const [y, m] = today.split("-").map(Number);
   const monthStart = new Date(y, m - 1, 1);

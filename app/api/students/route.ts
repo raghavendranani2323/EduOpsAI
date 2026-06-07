@@ -21,17 +21,21 @@ const PAGE_SIZE = 50;
 
 export async function GET(req: Request) {
   try {
-    const { user, institution } = await requireInstitution();
+    const { user, institution, membership } = await requireInstitution();
     const { searchParams } = new URL(req.url);
     const q       = searchParams.get("q")?.trim() ?? "";
     const classId = searchParams.get("classId") ?? "";
     const status  = (searchParams.get("status") ?? "ACTIVE") as "ACTIVE" | "ARCHIVED";
     const cursor  = searchParams.get("cursor") ?? "";
 
+    const { getTeacherClassIds } = await import("@/lib/tenant/teacher-scope");
+    const teacherIds = await withRls(user.id, (tx) => getTeacherClassIds(tx, user.id, institution.id, membership.role));
+
     const where = {
       institutionId: institution.id,
       ...(status !== ("ALL" as string) ? { status } : {}),
       ...(classId ? { classId } : {}),
+      ...(teacherIds !== null ? { classId: { in: teacherIds.length ? teacherIds : ["__none__"] } } : {}),
       ...(q
         ? {
             OR: [
