@@ -12,20 +12,38 @@ datasource db {
 // ─────────────────────────────────────────────
 
 model Profile {
-  id        String   @id // = auth.users.id
-  fullName  String
-  phone     String?
-  avatarUrl String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            String   @id // = auth.users.id
+  fullName      String
+  phone         String?
+  email         String?
+  avatarUrl     String?
+  designation   String?
+  qualification String?
+  joinedAt      DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   memberships       Membership[]
   markedSessions    AttendanceSession[]
   recordedPayments  Payment[]
   classHeadFor      ClassGroup[]        @relation("ClassHead")
   sectionTeacherFor Class[]             @relation("SectionTeacher")
+  teacherSubjects   TeacherSubject[]
 
   @@map("profiles")
+}
+
+model TeacherSubject {
+  id        String  @id @default(cuid())
+  profileId String
+  subjectId String
+
+  profile Profile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, subjectId])
+  @@index([subjectId])
+  @@map("teacher_subjects")
 }
 
 model Institution {
@@ -573,9 +591,10 @@ model Subject {
   code          String?
   createdAt     DateTime @default(now())
 
-  institution Institution  @relation(fields: [institutionId], references: [id], onDelete: Cascade)
-  class       Class?       @relation(fields: [classId], references: [id])
-  examResults ExamResult[]
+  institution     Institution      @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  class           Class?           @relation(fields: [classId], references: [id])
+  examResults     ExamResult[]
+  teacherSubjects TeacherSubject[]
 
   @@map("subjects")
 }
