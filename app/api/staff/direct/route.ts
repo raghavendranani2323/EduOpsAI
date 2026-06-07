@@ -127,22 +127,60 @@ export async function POST(req: Request) {
 
   let authUserId: string | null = null;
   let createdNew = false;
+  let resetPassword = false;
 
   // 1. Look up existing auth user (idempotent re-add)
   const existingId = await findExistingAuthUser(email, normalizedPhone);
 
   if (existingId) {
     authUserId = existingId;
-    // Reset password so the admin can give the teacher fresh credentials
-    const updated = await admin.auth.admin.updateUserById(existingId, {
-      password,
-      ...(email ? { email, email_confirm: true } : {}),
-      phone: normalizedPhone.replace(/^\+/, ""),
-      phone_confirm: true,
-      user_metadata: { fullName, designation, role, lastResetVia: "direct-staff" },
+
+    // SECURITY: don't blindly reset the password of an existing user. Decide
+    // what to do based on their current memberships:
+    //   a) Already belongs to THIS institution (active or revoked) → reactivate/
+    //      update; do NOT reset password unless this admin is the only one who can.
+    //   b) Belongs to OTHER institution(s) → refuse. Admin must send an email
+    //      invite (the user accepts on their own, no password ever shown to admin).
+    //   c) Has no memberships anywhere (orphan auth user) → safe to reset.
+    const memberships = await prismaAdmin.membership.findMany({
+      where: { userId: existingId, revokedAt: null },
+      select: { institutionId: true, role: true },
     });
-    if (updated.error) {
-      return NextResponse.json({ ok: false, error: updated.error.message }, { status: 500 });
+
+    const inThisInstitution = memberships.some(m => m.institutionId === institution.id);
+    const inOtherInstitution = memberships.some(m => m.institutionId !== institution.id);
+
+    if (inOtherInstitution && !inThisInstitution) {
+      return NextResponse.json({
+        ok: false,
+        error: "This number/email already belongs to a user at another institution. Send them an email invitation instead so they can accept on their own.",
+      }, { status: 409 });
+    }
+
+    if (inThisInstitution) {
+      // Already a member here — update profile/role, do NOT reset password
+      const updated = await admin.auth.admin.updateUserById(existingId, {
+        phone: normalizedPhone.replace(/^\+/, ""),
+        phone_confirm: true,
+        user_metadata: { fullName, designation, role, lastUpdatedVia: "direct-staff" },
+      });
+      if (updated.error) {
+        return NextResponse.json({ ok: false, error: updated.error.message }, { status: 500 });
+      }
+      // Password stays as-is; caller will see the placeholder
+    } else {
+      // Orphan auth user — safe to reset password
+      const updated = await admin.auth.admin.updateUserById(existingId, {
+        password,
+        ...(email ? { email, email_confirm: true } : {}),
+        phone: normalizedPhone.replace(/^\+/, ""),
+        phone_confirm: true,
+        user_metadata: { fullName, designation, role, lastResetVia: "direct-staff" },
+      });
+      if (updated.error) {
+        return NextResponse.json({ ok: false, error: updated.error.message }, { status: 500 });
+      }
+      resetPassword = true;
     }
   } else {
     // 2. Create new auth user (email OR phone identifier, never both fake)
@@ -231,18 +269,27 @@ export async function POST(req: Request) {
       return m;
     });
 
-    await writeAuditLog(user.id, createdNew ? "staff.create" : "staff.reactivate", authUserId!, {
-      institutionId: institution.id,
-      role,
-      loginMode,
-      hasEmail: !!email,
-      fullName,
-    });
+    const passwordIssued = createdNew || resetPassword;
+
+    await writeAuditLog(
+      user.id,
+      createdNew ? "staff.create" : passwordIssued ? "staff.reactivate" : "staff.update",
+      authUserId!,
+      {
+        institutionId: institution.id,
+        role,
+        loginMode,
+        hasEmail: !!email,
+        passwordIssued,
+        fullName,
+      },
+    );
 
     return NextResponse.json({
       ok: true,
       staff: { id: authUserId, fullName, role: member.role, phone: normalizedPhone, email },
-      credentials: {
+      passwordIssued,
+      credentials: passwordIssued ? {
         mode: loginMode,
         identifier: loginMode === "email" ? email : normalizedPhone,
         password,
@@ -253,7 +300,8 @@ export async function POST(req: Request) {
           loginMode === "email"
             ? `Hi ${fullName.split(" ")[0]}, your EduOps login:\nEmail: ${email}\nPassword: ${password}\nLogin: ${process.env.NEXT_PUBLIC_APP_URL ?? origin}/login`
             : `Hi ${fullName.split(" ")[0]}, your EduOps login:\nPhone: ${normalizedPhone}\nPassword: ${password}\nLogin: ${process.env.NEXT_PUBLIC_APP_URL ?? origin}/teacher-login`,
-      },
+      } : null,
+      reactivatedExisting: !passwordIssued && !createdNew,
     }, { status: 201 });
   } catch (err) {
     console.error("[staff/direct] DB failure", err);

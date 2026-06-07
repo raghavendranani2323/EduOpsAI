@@ -120,9 +120,20 @@ export function AddTeacherSheet({ open, onOpenChange, onCreated, defaultRole = "
         toast.error(result.error ?? "Failed to add teacher");
         return;
       }
-      toast.success(`${data.fullName} added`);
       onCreated?.(result.staff);
-      setCredentials(result.credentials);
+      if (result.credentials) {
+        toast.success(`${data.fullName} added`);
+        setCredentials(result.credentials);
+      } else if (result.reactivatedExisting) {
+        toast.success(`${data.fullName} re-added to this institution`, {
+          description: "Existing user — their password was not reset. Ask them to sign in with their existing password.",
+          duration: 6000,
+        });
+        close();
+      } else {
+        toast.success(`${data.fullName} added`);
+        close();
+      }
     } finally {
       setSubmitting(false);
     }

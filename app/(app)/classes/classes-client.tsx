@@ -20,6 +20,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { AddTeacherSheet } from "@/components/staff/add-teacher-sheet";
+import { sheetHandoff } from "@/lib/ui/sheet-handoff";
 
 const classSchema = z.object({
   name:           z.string().min(1, "Class name is required").max(80),
@@ -549,7 +550,7 @@ export function ClassesClient({
                 {staff.length === 0 ? (
                   <div className="rounded-xl border border-dashed border-border p-3 text-xs text-muted-foreground flex items-center justify-between gap-2">
                     <span>No teachers yet</span>
-                    <Button type="button" size="sm" variant="outline" onClick={() => { setClassSheetOpen(false); setTimeout(() => setAddTeacherOpen(true), 200); }}>
+                    <Button type="button" size="sm" variant="outline" onClick={() => sheetHandoff(() => setClassSheetOpen(false), () => setAddTeacherOpen(true))}>
                       <UserPlus /> Add teacher
                     </Button>
                   </div>
@@ -561,7 +562,7 @@ export function ClassesClient({
                         <option key={m.id} value={m.id}>{m.fullName} · {m.role.toLowerCase()}</option>
                       ))}
                     </Select>
-                    <button type="button" onClick={() => { setClassSheetOpen(false); setTimeout(() => setAddTeacherOpen(true), 200); }} className="text-xs text-primary font-medium hover:underline">
+                    <button type="button" onClick={() => sheetHandoff(() => setClassSheetOpen(false), () => setAddTeacherOpen(true))} className="text-xs text-primary font-medium hover:underline">
                       + Add a new teacher
                     </button>
                   </>
@@ -598,7 +599,7 @@ export function ClassesClient({
                 {staff.length === 0 ? (
                   <div className="rounded-xl border border-dashed border-border p-3 text-xs text-muted-foreground flex items-center justify-between gap-2">
                     <span>No teachers yet</span>
-                    <Button type="button" size="sm" variant="outline" onClick={() => { setSectionSheetGroup(null); setTimeout(() => setAddTeacherOpen(true), 200); }}>
+                    <Button type="button" size="sm" variant="outline" onClick={() => sheetHandoff(() => setSectionSheetGroup(null), () => setAddTeacherOpen(true))}>
                       <UserPlus /> Add teacher
                     </Button>
                   </div>
@@ -610,7 +611,7 @@ export function ClassesClient({
                         <option key={m.id} value={m.id}>{m.fullName} · {m.role.toLowerCase()}</option>
                       ))}
                     </Select>
-                    <button type="button" onClick={() => { setSectionSheetGroup(null); setTimeout(() => setAddTeacherOpen(true), 200); }} className="text-xs text-primary font-medium hover:underline">
+                    <button type="button" onClick={() => sheetHandoff(() => setSectionSheetGroup(null), () => setAddTeacherOpen(true))} className="text-xs text-primary font-medium hover:underline">
                       + Add a new teacher
                     </button>
                   </>
@@ -652,7 +653,7 @@ export function ClassesClient({
                     onChange={(v) => updateGroup(leadershipGroup.id, "classHeadId", v || null, classHeadVal)}
                     options={staff.map(m => ({ id: m.id, label: `${m.fullName} · ${m.role.toLowerCase()}` }))}
                     emptyAction={
-                      <button type="button" onClick={() => { setLeadershipGroup(null); setTimeout(() => setAddTeacherOpen(true), 200); }} className="text-xs text-primary font-medium hover:underline">
+                      <button type="button" onClick={() => sheetHandoff(() => setLeadershipGroup(null), () => setAddTeacherOpen(true))} className="text-xs text-primary font-medium hover:underline">
                         + Add a new teacher
                       </button>
                     }
@@ -710,7 +711,7 @@ export function ClassesClient({
                     onChange={(v) => updateSection(leadershipSection.id, "sectionTeacherId", v || null, teacherVal)}
                     options={staff.map(m => ({ id: m.id, label: `${m.fullName} · ${m.role.toLowerCase()}` }))}
                     emptyAction={
-                      <button type="button" onClick={() => { setLeadershipSection(null); setTimeout(() => setAddTeacherOpen(true), 200); }} className="text-xs text-primary font-medium hover:underline">
+                      <button type="button" onClick={() => sheetHandoff(() => setLeadershipSection(null), () => setAddTeacherOpen(true))} className="text-xs text-primary font-medium hover:underline">
                         + Add a new teacher
                       </button>
                     }

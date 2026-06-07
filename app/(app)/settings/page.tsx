@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Users, GraduationCap, Building2, Bell, ChevronRight, Calendar } from "lucide-react";
+import { Users, GraduationCap, Building2, Bell, ChevronRight, Calendar, ShieldCheck } from "lucide-react";
 import { SignOutButton } from "@/components/shell/sign-out-button";
 import { LanguageSwitcher } from "@/components/i18n/language-switcher";
 import { PushToggle } from "@/components/notifications/push-toggle";
@@ -10,6 +10,7 @@ const SETTINGS_LINKS = [
   { href: "/classes",               icon: GraduationCap, label: "Classes / Batches",   desc: "Manage your classes" },
   { href: "/settings/institution",  icon: Building2,     label: "Institution profile", desc: "Update institution details" },
   { href: "/settings/notifications",icon: Bell,          label: "Notifications",       desc: "Push & WhatsApp preferences" },
+  { href: "/settings/audit-log",    icon: ShieldCheck,   label: "Audit log",           desc: "Who did what, when" },
 ];
 
 export default function SettingsPage() {
