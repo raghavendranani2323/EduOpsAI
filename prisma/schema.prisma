@@ -54,6 +54,16 @@ model Institution {
   state                String
   board                String?
   affiliationNo        String?
+  phone                String?
+  addressLine1         String?
+  addressLine2         String?
+  pincode              String?
+  principalName        String?
+  gstNumber            String?
+  logoUrl              String?
+  receiptPrefix        String?         @default("INV")
+  receiptCounter       Int             @default(0)
+  siblingDiscounts     Json?
   isDemo               Boolean         @default(false)
   terminologyOverrides Json?
   createdAt            DateTime        @default(now())
@@ -149,6 +159,7 @@ model AcademicYear {
   institution Institution  @relation(fields: [institutionId], references: [id], onDelete: Cascade)
   classGroups ClassGroup[]
   classes     Class[]
+  feePlans    FeePlan[]
 
   @@unique([institutionId, name])
   @@map("academic_years")
@@ -358,20 +369,40 @@ enum AttendanceStatus {
 model FeePlan {
   id               String   @id @default(cuid())
   institutionId    String
+  academicYearId   String?
   name             String
-  amount           Int // in paise (₹1 = 100 paise)
+  amount           Int // total in paise (sum of components, or legacy single value)
   cadence          Cadence  @default(MONTHLY)
   lateFeeAmount    Int      @default(0)
+  lateFeePercent   Int      @default(0) // basis points, 250 = 2.5%
   lateFeeAfterDays Int      @default(10)
   classId          String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  institution Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
-  class       Class?      @relation(fields: [classId], references: [id])
-  invoices    Invoice[]
+  institution  Institution        @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  academicYear AcademicYear?      @relation(fields: [academicYearId], references: [id], onDelete: SetNull)
+  class        Class?             @relation(fields: [classId], references: [id])
+  invoices     Invoice[]
+  components   FeePlanComponent[]
 
+  @@index([institutionId, academicYearId])
   @@map("fee_plans")
+}
+
+model FeePlanComponent {
+  id         String   @id @default(cuid())
+  planId     String
+  name       String
+  amount     Int      // paise
+  isOptional Boolean  @default(false)
+  order      Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  plan FeePlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@index([planId])
+  @@map("fee_plan_components")
 }
 
 enum Cadence {
@@ -416,6 +447,8 @@ model Invoice {
   amountPaid    Int           @default(0)
   status        InvoiceStatus @default(UNPAID)
   dueDate       DateTime      @db.Date
+  receiptNumber String?
+  notes         String?
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
@@ -447,6 +480,7 @@ model Payment {
   razorpayOrderId           String?
   razorpayPaymentId         String?     @unique
   razorpaySignatureVerified Boolean     @default(false)
+  receiptSharedAt           DateTime?
   createdAt                 DateTime    @default(now())
 
   institution Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)

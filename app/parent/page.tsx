@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import Link from "next/link";
-import { GraduationCap, CalendarCheck, Wallet, BookOpen, Megaphone, ChevronRight, LogOut, Users } from "lucide-react";
+import { GraduationCap, CalendarCheck, Wallet, BookOpen, Megaphone, ChevronRight, LogOut, Users, Receipt, Download } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { prismaAdmin } from "@/lib/prisma/admin";
 import { findChildrenForPhone } from "@/lib/parent/children";
@@ -56,7 +56,7 @@ export default async function ParentDashboard() {
   const today = new Date();
   const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
 
-  const [recentRecords, invoices, homework, notices] = await Promise.all([
+  const [recentRecords, invoices, paidInvoices, homework, notices] = await Promise.all([
     prismaAdmin.attendanceRecord.findMany({
       where: { studentId: child.id, session: { sessionDate: { gte: monthStart } } },
       include: { session: { select: { sessionDate: true } } },
@@ -67,6 +67,12 @@ export default async function ParentDashboard() {
       where: { studentId: child.id, status: { in: ["UNPAID", "PARTIAL"] } },
       orderBy: { dueDate: "asc" },
       take: 10,
+    }),
+    prismaAdmin.invoice.findMany({
+      where: { studentId: child.id, status: "PAID" },
+      orderBy: { updatedAt: "desc" },
+      take: 12,
+      include: { payments: { orderBy: { paidAt: "desc" }, take: 1 } },
     }),
     prismaAdmin.student.findUnique({
       where: { id: child.id },
@@ -196,6 +202,31 @@ export default async function ParentDashboard() {
             </ul>
           )}
         </Section>
+
+        {paidInvoices.length > 0 && (
+          <Section icon={Receipt} title="Past receipts">
+            <ul className="space-y-2">
+              {paidInvoices.map(inv => {
+                const lastPayment = inv.payments[0];
+                return (
+                  <li key={inv.id} className="flex items-center gap-3 border rounded-xl p-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold tabular-nums">{formatINR(inv.amountDue)}</p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {inv.receiptNumber ? <span className="font-mono">{inv.receiptNumber} · </span> : null}
+                        {lastPayment ? `Paid ${formatDate(lastPayment.paidAt.toISOString().split("T")[0])}` : "Paid"}
+                      </p>
+                    </div>
+                    <Badge variant="success">Paid</Badge>
+                  </li>
+                );
+              })}
+            </ul>
+            <p className="text-[11px] text-muted-foreground mt-2.5 text-center">
+              Need an actual receipt PDF? Please ask the school office.
+            </p>
+          </Section>
+        )}
 
         <Section icon={BookOpen} title="Homework">
           {homework.length === 0 ? (
