@@ -14,104 +14,81 @@ function greeting(): string {
 
 export default async function DashboardPage() {
   const { user, institution, membership } = await requireInstitution();
-  const today   = todayIST();
+  const today = todayIST();
   const todayDt = new Date(today);
 
-  // Month window for fees
   const [y, m] = today.split("-").map(Number);
   const monthStart = new Date(y, m - 1, 1);
-  const monthEnd   = new Date(y, m, 0);
+  const monthEnd = new Date(y, m, 0);
 
   const data = await withRls(user.id, async (tx) => {
     const isTeacher = membership.role === "TEACHER";
 
-    const [
-      totalStudents,
-      activeStudents,
-      unmarkedToday,
-      overdueInvoices,
-      feeCollected,
-      feeOutstanding,
-      hotLeads,
-      followupsDue,
-      feeByMonth,
-    ] = await Promise.all([
-      // total students
-      tx.student.count({ where: { institutionId: institution.id } }),
-      // active students
-      tx.student.count({ where: { institutionId: institution.id, status: "ACTIVE" } }),
-      // classes that have NOT had attendance marked today
-      tx.class.count({
-        where: {
-          institutionId: institution.id,
-          NOT: {
-            sessions: {
-              some: {
-                sessionDate: todayDt,
-                sessionLabel: "morning",
-              },
+    // Keep these sequential: pg warns against concurrent queries on the same transaction client.
+    const totalStudents = await tx.student.count({ where: { institutionId: institution.id } });
+    const activeStudents = await tx.student.count({ where: { institutionId: institution.id, status: "ACTIVE" } });
+    const unmarkedToday = await tx.class.count({
+      where: {
+        institutionId: institution.id,
+        NOT: {
+          sessions: {
+            some: {
+              sessionDate: todayDt,
+              sessionLabel: "morning",
             },
           },
         },
-      }),
-      // overdue invoices count
-      tx.invoice.count({
-        where: {
-          institutionId: institution.id,
-          status: { in: ["UNPAID", "PARTIAL"] },
-          dueDate: { lt: todayDt },
-        },
-      }),
-      // this month collected
-      tx.payment.aggregate({
-        where: {
-          institutionId: institution.id,
-          paidAt: { gte: monthStart, lte: monthEnd },
-        },
-        _sum: { amount: true },
-      }),
-      // outstanding this month
-      tx.invoice.aggregate({
-        where: {
-          institutionId: institution.id,
-          status: { in: ["UNPAID", "PARTIAL"] },
-          periodStart: { gte: monthStart },
-          periodEnd: { lte: monthEnd },
-        },
-        _sum: { amountDue: true, amountPaid: true },
-      }),
-      // hot leads (active)
-      isTeacher ? Promise.resolve(0) : tx.lead.count({
-        where: {
-          institutionId: institution.id,
-          priority: "HOT",
-          stage: { notIn: ["CONVERTED", "LOST"] },
-        },
-      }),
-      // follow-ups due today or overdue
-      isTeacher ? Promise.resolve(0) : tx.lead.count({
-        where: {
-          institutionId: institution.id,
-          nextFollowupAt: { lte: todayDt },
-          stage: { notIn: ["CONVERTED", "LOST"] },
-        },
-      }),
-      // fee collection last 6 months — one number per month
-      isTeacher ? Promise.resolve([]) : tx.$queryRaw<{ month: string; total: bigint }[]>`
-        SELECT to_char(date_trunc('month', "paidAt" AT TIME ZONE 'Asia/Kolkata'), 'YYYY-MM') AS month,
-               SUM(amount) AS total
-        FROM payments
-        WHERE "institutionId" = ${institution.id}
-          AND "paidAt" >= ${new Date(y, m - 7, 1)}
-        GROUP BY 1
-        ORDER BY 1
-      `,
-    ]);
+      },
+    });
+    const overdueInvoices = await tx.invoice.count({
+      where: {
+        institutionId: institution.id,
+        status: { in: ["UNPAID", "PARTIAL"] },
+        dueDate: { lt: todayDt },
+      },
+    });
+    const feeCollected = await tx.payment.aggregate({
+      where: {
+        institutionId: institution.id,
+        paidAt: { gte: monthStart, lte: monthEnd },
+      },
+      _sum: { amount: true },
+    });
+    const feeOutstanding = await tx.invoice.aggregate({
+      where: {
+        institutionId: institution.id,
+        status: { in: ["UNPAID", "PARTIAL"] },
+        periodStart: { gte: monthStart },
+        periodEnd: { lte: monthEnd },
+      },
+      _sum: { amountDue: true, amountPaid: true },
+    });
+    const hotLeads = isTeacher ? 0 : await tx.lead.count({
+      where: {
+        institutionId: institution.id,
+        priority: "HOT",
+        stage: { notIn: ["CONVERTED", "LOST"] },
+      },
+    });
+    const followupsDue = isTeacher ? 0 : await tx.lead.count({
+      where: {
+        institutionId: institution.id,
+        nextFollowupAt: { lte: todayDt },
+        stage: { notIn: ["CONVERTED", "LOST"] },
+      },
+    });
+    const feeByMonth = isTeacher ? [] : await tx.$queryRaw<{ month: string; total: bigint }[]>`
+      SELECT to_char(date_trunc('month', "paidAt" AT TIME ZONE 'Asia/Kolkata'), 'YYYY-MM') AS month,
+             SUM(amount) AS total
+      FROM payments
+      WHERE "institutionId" = ${institution.id}
+        AND "paidAt" >= ${new Date(y, m - 7, 1)}
+      GROUP BY 1
+      ORDER BY 1
+    `;
 
     const outstanding = (feeOutstanding._sum.amountDue ?? 0) - (feeOutstanding._sum.amountPaid ?? 0);
-
-    // Format trend as array of { month, total }
-    const trend = (feeByMonth as { month: string; total: bigint }[]).map(r => ({
+    const trend = feeByMonth.map((r) => ({
       month: r.month,
       total: Number(r.total),
     }));
@@ -130,21 +107,29 @@ export default async function DashboardPage() {
     };
   });
 
-  const maxTrend = Math.max(...data.trend.map(t => t.total), 1);
+  const maxTrend = Math.max(...data.trend.map((t) => t.total), 1);
   const MONTHS: Record<string, string> = {
-    "01": "Jan", "02": "Feb", "03": "Mar", "04": "Apr", "05": "May", "06": "Jun",
-    "07": "Jul", "08": "Aug", "09": "Sep", "10": "Oct", "11": "Nov", "12": "Dec",
+    "01": "Jan",
+    "02": "Feb",
+    "03": "Mar",
+    "04": "Apr",
+    "05": "May",
+    "06": "Jun",
+    "07": "Jul",
+    "08": "Aug",
+    "09": "Sep",
+    "10": "Oct",
+    "11": "Nov",
+    "12": "Dec",
   };
 
   return (
     <div className="p-4 md:p-6 space-y-5 max-w-2xl">
-      {/* Greeting */}
       <div>
         <h1 className="text-xl font-bold">{greeting()}</h1>
         <p className="text-muted-foreground text-sm mt-0.5">{institution.name}</p>
       </div>
 
-      {/* Action center — only show issues that exist */}
       {(data.unmarkedToday > 0 || data.overdueInvoices > 0 || data.followupsDue > 0) && (
         <div className="space-y-2">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Action needed</p>
@@ -156,10 +141,12 @@ export default async function DashboardPage() {
               >
                 <BookOpen className="h-5 w-5 text-amber-600 shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-amber-900">{data.unmarkedToday} class{data.unmarkedToday > 1 ? "es" : ""} not marked today</p>
+                  <p className="text-sm font-medium text-amber-900">
+                    {data.unmarkedToday} class{data.unmarkedToday > 1 ? "es" : ""} not marked today
+                  </p>
                   <p className="text-xs text-amber-700">Mark attendance now</p>
                 </div>
-                <span className="text-amber-600 text-xs">→</span>
+                <span className="text-amber-600 text-xs">-&gt;</span>
               </Link>
             )}
 
@@ -170,10 +157,12 @@ export default async function DashboardPage() {
               >
                 <AlertCircle className="h-5 w-5 text-red-600 shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-red-900">{data.overdueInvoices} overdue invoice{data.overdueInvoices > 1 ? "s" : ""}</p>
+                  <p className="text-sm font-medium text-red-900">
+                    {data.overdueInvoices} overdue invoice{data.overdueInvoices > 1 ? "s" : ""}
+                  </p>
                   <p className="text-xs text-red-700">View and collect</p>
                 </div>
-                <span className="text-red-600 text-xs">→</span>
+                <span className="text-red-600 text-xs">-&gt;</span>
               </Link>
             )}
 
@@ -184,17 +173,18 @@ export default async function DashboardPage() {
               >
                 <Clock className="h-5 w-5 text-blue-600 shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-blue-900">{data.followupsDue} follow-up{data.followupsDue > 1 ? "s" : ""} due</p>
+                  <p className="text-sm font-medium text-blue-900">
+                    {data.followupsDue} follow-up{data.followupsDue > 1 ? "s" : ""} due
+                  </p>
                   <p className="text-xs text-blue-700">Check admissions pipeline</p>
                 </div>
-                <span className="text-blue-600 text-xs">→</span>
+                <span className="text-blue-600 text-xs">-&gt;</span>
               </Link>
             )}
           </div>
         </div>
       )}
 
-      {/* KPI grid */}
       {!data.isTeacher && (
         <div className="grid grid-cols-2 gap-3">
           <div className="border rounded-xl p-4 space-y-1">
@@ -237,7 +227,6 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      {/* Teacher stats */}
       {data.isTeacher && (
         <div className="grid grid-cols-2 gap-3">
           <div className="border rounded-xl p-4 space-y-1">
@@ -258,14 +247,13 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      {/* Fee collection trend chart */}
       {data.trend.length > 0 && !data.isTeacher && (
         <div className="border rounded-xl p-4 space-y-3">
           <p className="text-sm font-semibold">Fee collection trend</p>
           <div className="flex items-end gap-1.5 h-24">
-            {data.trend.map(t => {
-              const pct  = Math.round((t.total / maxTrend) * 100);
-              const mo   = t.month.split("-")[1];
+            {data.trend.map((t) => {
+              const pct = Math.round((t.total / maxTrend) * 100);
+              const mo = t.month.split("-")[1];
               return (
                 <div key={t.month} className="flex-1 flex flex-col items-center gap-1">
                   <div className="w-full bg-primary/15 rounded-sm relative" style={{ height: `${Math.max(pct, 4)}%` }}>
@@ -279,7 +267,6 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      {/* Quick links */}
       <div className="space-y-2">
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Quick actions</p>
         <div className="grid grid-cols-2 gap-2">

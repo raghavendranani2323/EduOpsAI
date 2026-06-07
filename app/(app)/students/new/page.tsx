@@ -8,8 +8,8 @@ export default async function NewStudentPage() {
     const [c, t] = await Promise.all([
       tx.class.findMany({
         where: { institutionId: institution.id },
-        orderBy: { name: "asc" },
-        select: { id: true, name: true },
+        orderBy: [{ name: "asc" }, { section: "asc" }],
+        select: { id: true, name: true, section: true },
       }),
       tx.tag.findMany({
         where: { institutionId: institution.id },

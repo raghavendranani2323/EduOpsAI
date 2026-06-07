@@ -20,7 +20,7 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
       tx.student.findFirst({
         where: { id, institutionId: institution.id },
         include: {
-          class: { select: { id: true, name: true } },
+          class: { select: { id: true, name: true, section: true } },
           studentTags: { include: { tag: true } },
           guardians: { include: { guardian: true } },
           invoices: {
@@ -30,7 +30,11 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
           },
         },
       }),
-      tx.class.findMany({ where: { institutionId: institution.id }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+      tx.class.findMany({
+        where: { institutionId: institution.id },
+        orderBy: [{ name: "asc" }, { section: "asc" }],
+        select: { id: true, name: true, section: true },
+      }),
       tx.tag.findMany({ where: { institutionId: institution.id }, orderBy: { label: "asc" } }),
     ]);
     return [s, c, tg] as const;
@@ -52,7 +56,7 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
         <div className="flex-1 min-w-0">
           <h1 className="text-xl font-bold truncate">{student.fullName}</h1>
           <p className="text-sm text-muted-foreground">
-            {student.class?.name ?? "No class"}
+            {student.class ? `${student.class.name}${student.class.section ? `-${student.class.section}` : ""}` : "No class"}
             {student.admissionNo ? ` · ${student.admissionNo}` : ""}
           </p>
         </div>
@@ -90,7 +94,7 @@ export default async function StudentDetailPage({ params }: { params: Promise<{ 
         </div>
         <div className="px-4 py-3 flex justify-between text-sm">
           <span className="text-muted-foreground">{t.class}</span>
-          <span className="font-medium">{student.class?.name ?? "—"}</span>
+          <span className="font-medium">{student.class ? `${student.class.name}${student.class.section ? `-${student.class.section}` : ""}` : "—"}</span>
         </div>
       </section>
 

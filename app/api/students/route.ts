@@ -46,7 +46,7 @@ export async function GET(req: Request) {
       tx.student.findMany({
         where,
         include: {
-          class: { select: { id: true, name: true } },
+          class: { select: { id: true, name: true, section: true } },
           studentTags: { include: { tag: true } },
           guardians: {
             where: { isPrimary: true },

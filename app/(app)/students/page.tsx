@@ -41,7 +41,7 @@ export default async function StudentsPage({
       tx.student.findMany({
         where,
         include: {
-          class: { select: { id: true, name: true } },
+          class: { select: { id: true, name: true, section: true } },
           studentTags: { include: { tag: true } },
           guardians: {
             where: { isPrimary: true },
@@ -56,8 +56,8 @@ export default async function StudentsPage({
       tx.student.count({ where }),
       tx.class.findMany({
         where: { institutionId: institution.id },
-        orderBy: { name: "asc" },
-        select: { id: true, name: true },
+        orderBy: [{ name: "asc" }, { section: "asc" }],
+        select: { id: true, name: true, section: true },
       }),
     ]);
 

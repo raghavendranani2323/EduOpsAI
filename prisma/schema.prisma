@@ -19,9 +19,11 @@ model Profile {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  memberships      Membership[]
-  markedSessions   AttendanceSession[]
-  recordedPayments Payment[]
+  memberships       Membership[]
+  markedSessions    AttendanceSession[]
+  recordedPayments  Payment[]
+  classHeadFor      ClassGroup[]        @relation("ClassHead")
+  sectionTeacherFor Class[]             @relation("SectionTeacher")
 
   @@map("profiles")
 }
@@ -41,6 +43,8 @@ model Institution {
 
   memberships    Membership[]
   invitations    Invitation[]
+  academicYears  AcademicYear[]
+  classGroups    ClassGroup[]
   classes        Class[]
   students       Student[]
   guardians      Guardian[]
@@ -114,23 +118,79 @@ model Invitation {
 // ACADEMIC — Classes + Students
 // ─────────────────────────────────────────────
 
-model Class {
-  id            String   @id @default(cuid())
+model AcademicYear {
+  id            String    @id @default(cuid())
   institutionId String
   name          String
-  section       String?
-  academicYear  String
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  startsOn      DateTime? @db.Date
+  endsOn        DateTime? @db.Date
+  isActive      Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
-  institution    Institution         @relation(fields: [institutionId], references: [id], onDelete: Cascade)
-  students       Student[]
-  sessions       AttendanceSession[]
-  feePlans       FeePlan[]
-  subjects       Subject[]
-  exams          Exam[]
-  timetableSlots TimetableSlot[]
-  homework       Homework[]
+  institution Institution  @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  classGroups ClassGroup[]
+  classes     Class[]
+
+  @@unique([institutionId, name])
+  @@map("academic_years")
+}
+
+model ClassGroup {
+  id             String   @id @default(cuid())
+  institutionId  String
+  academicYearId String?
+  name           String
+  medium         String?
+  classHeadId    String?
+  classLeaderId  String?
+  girlsLeaderId  String?
+  boysLeaderId   String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  institution  Institution   @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  academicYear AcademicYear? @relation(fields: [academicYearId], references: [id], onDelete: SetNull)
+  classHead    Profile?      @relation("ClassHead", fields: [classHeadId], references: [id], onDelete: SetNull)
+  classLeader  Student?      @relation("ClassGroupLeader", fields: [classLeaderId], references: [id], onDelete: SetNull)
+  girlsLeader  Student?      @relation("ClassGroupGirlsLeader", fields: [girlsLeaderId], references: [id], onDelete: SetNull)
+  boysLeader   Student?      @relation("ClassGroupBoysLeader", fields: [boysLeaderId], references: [id], onDelete: SetNull)
+  sections     Class[]
+
+  @@unique([institutionId, academicYearId, name])
+  @@map("class_groups")
+}
+
+model Class {
+  id               String   @id @default(cuid())
+  institutionId    String
+  classGroupId     String?
+  academicYearId   String?
+  name             String
+  section          String?
+  medium           String?
+  academicYear     String
+  sectionTeacherId String?
+  sectionLeaderId  String?
+  girlsLeaderId    String?
+  boysLeaderId     String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  institution     Institution         @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  classGroup      ClassGroup?         @relation(fields: [classGroupId], references: [id], onDelete: SetNull)
+  academicYearRef AcademicYear?       @relation(fields: [academicYearId], references: [id], onDelete: SetNull)
+  sectionTeacher  Profile?            @relation("SectionTeacher", fields: [sectionTeacherId], references: [id], onDelete: SetNull)
+  sectionLeader   Student?            @relation("SectionLeader", fields: [sectionLeaderId], references: [id], onDelete: SetNull)
+  girlsLeader     Student?            @relation("SectionGirlsLeader", fields: [girlsLeaderId], references: [id], onDelete: SetNull)
+  boysLeader      Student?            @relation("SectionBoysLeader", fields: [boysLeaderId], references: [id], onDelete: SetNull)
+  students        Student[]
+  sessions        AttendanceSession[]
+  feePlans        FeePlan[]
+  subjects        Subject[]
+  exams           Exam[]
+  timetableSlots  TimetableSlot[]
+  homework        Homework[]
 
   @@map("classes")
 }
@@ -149,15 +209,21 @@ model Student {
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
-  institution       Institution        @relation(fields: [institutionId], references: [id], onDelete: Cascade)
-  class             Class?             @relation(fields: [classId], references: [id])
-  guardians         StudentGuardian[]
-  studentTags       StudentTag[]
-  attendanceRecords AttendanceRecord[]
-  invoices          Invoice[]
-  feeAdjustments    FeeAdjustment[]
-  leads             Lead[]             @relation("ConvertedStudent")
-  examResults       ExamResult[]
+  institution              Institution        @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  class                    Class?             @relation(fields: [classId], references: [id])
+  guardians                StudentGuardian[]
+  studentTags              StudentTag[]
+  attendanceRecords        AttendanceRecord[]
+  invoices                 Invoice[]
+  feeAdjustments           FeeAdjustment[]
+  leads                    Lead[]             @relation("ConvertedStudent")
+  examResults              ExamResult[]
+  classGroupLeaderFor      ClassGroup[]       @relation("ClassGroupLeader")
+  classGroupGirlsLeaderFor ClassGroup[]       @relation("ClassGroupGirlsLeader")
+  classGroupBoysLeaderFor  ClassGroup[]       @relation("ClassGroupBoysLeader")
+  sectionLeaderFor         Class[]            @relation("SectionLeader")
+  sectionGirlsLeaderFor    Class[]            @relation("SectionGirlsLeader")
+  sectionBoysLeaderFor     Class[]            @relation("SectionBoysLeader")
 
   @@map("students")
 }

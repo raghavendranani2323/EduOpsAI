@@ -23,7 +23,7 @@ const schema = z.object({
 type FormData = z.infer<typeof schema>;
 
 interface Props {
-  classes: { id: string; name: string }[];
+  classes: { id: string; name: string; section: string | null }[];
   tags:    { id: string; label: string; color: string }[];
   institutionType: InstitutionType;
 }
@@ -113,7 +113,7 @@ export function NewStudentForm({ classes, tags, institutionType }: Props) {
               <label className="text-xs font-medium text-muted-foreground">{t.class}</label>
               <select {...register("classId")} className="mt-1 w-full border rounded-lg px-3 py-2.5 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-primary/50">
                 <option value="">— select —</option>
-                {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {classes.map(c => <option key={c.id} value={c.id}>{c.name}{c.section ? `-${c.section}` : ""}</option>)}
               </select>
             </div>
           </div>

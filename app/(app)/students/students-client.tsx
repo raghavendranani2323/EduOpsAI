@@ -7,7 +7,7 @@ import { Search, User, ChevronRight } from "lucide-react";
 import type { Terminology } from "@/lib/i18n/terminology";
 
 interface Tag   { id: string; label: string; color: string }
-interface Class { id: string; name: string }
+interface Class { id: string; name: string; section: string | null }
 
 interface Student {
   id: string;
@@ -76,6 +76,11 @@ export function StudentsClient({
     setLoading(false);
   }
 
+  function classLabel(cls: Class | null) {
+    if (!cls) return "No class";
+    return `${cls.name}${cls.section ? `-${cls.section}` : ""}`;
+  }
+
   return (
     <div className="space-y-3">
       {/* Filters */}
@@ -98,7 +103,7 @@ export function StudentsClient({
         >
           <option value="">All {t.classes.toLowerCase()}</option>
           {classes.map(c => (
-            <option key={c.id} value={c.id}>{c.name}</option>
+            <option key={c.id} value={c.id}>{classLabel(c)}</option>
           ))}
         </select>
 
@@ -148,7 +153,7 @@ export function StudentsClient({
                   ))}
                 </div>
                 <p className="text-xs text-muted-foreground truncate">
-                  {s.class?.name ?? "No class"}
+                  {classLabel(s.class)}
                   {s.admissionNo ? ` · ${s.admissionNo}` : ""}
                   {primary ? ` · ${primary.fullName}` : ""}
                 </p>

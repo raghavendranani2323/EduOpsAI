@@ -16,10 +16,16 @@ export async function withRls<T>(
   userId: string,
   fn: (tx: PrismaTx) => Promise<T>
 ): Promise<T> {
-  return prisma.$transaction(async (tx) => {
-    await tx.$executeRaw(
-      Prisma.sql`SELECT set_config('request.jwt.claims', ${JSON.stringify({ sub: userId })}, true)`
-    );
-    return fn(tx);
-  });
+  return prisma.$transaction(
+    async (tx) => {
+      await tx.$executeRaw(
+        Prisma.sql`SELECT set_config('request.jwt.claims', ${JSON.stringify({ sub: userId })}, true)`
+      );
+      return fn(tx);
+    },
+    {
+      maxWait: 15000,
+      timeout: 30000,
+    }
+  );
 }
