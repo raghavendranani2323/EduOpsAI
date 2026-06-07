@@ -3,6 +3,7 @@ import { Geist } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { QueryProvider } from "@/components/providers/query-provider";
+import { SwRegister } from "@/components/providers/sw-register";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-geist" });
 
@@ -27,6 +28,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           {children}
         </QueryProvider>
         <Toaster />
+        <SwRegister />
       </body>
     </html>
   );
