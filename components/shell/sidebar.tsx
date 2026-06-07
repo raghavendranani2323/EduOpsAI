@@ -8,6 +8,7 @@ import {
   Bell, Calendar,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { SignOutButton } from "@/components/shell/sign-out-button";
 
 const NAV_ITEMS = [
   { href: "/dashboard",      icon: LayoutDashboard, label: "Dashboard"      },
@@ -53,6 +54,10 @@ export function Sidebar() {
           );
         })}
       </nav>
+
+      <div className="border-t p-3">
+        <SignOutButton />
+      </div>
     </aside>
   );
 }

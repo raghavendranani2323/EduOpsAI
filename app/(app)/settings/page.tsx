@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Users, GraduationCap, Building2 } from "lucide-react";
+import { SignOutButton } from "@/components/shell/sign-out-button";
 
 const SETTINGS_LINKS = [
   { href: "/settings/team",       icon: Users,         label: "Team & Invitations", desc: "Invite staff and manage roles" },
@@ -27,6 +28,10 @@ export default function SettingsPage() {
             <span className="text-muted-foreground">→</span>
           </Link>
         ))}
+      </div>
+
+      <div className="pt-2">
+        <SignOutButton variant="settings" />
       </div>
     </div>
   );

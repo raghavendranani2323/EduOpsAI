@@ -158,7 +158,7 @@ export function TimetableClient({ slots: initial, classes, subjects }: Props) {
                 </select>
               </div>
               <div>
-                <label className="text-xs font-medium text-muted-foreground">Label (optional, e.g. "Lunch Break")</label>
+                <label className="text-xs font-medium text-muted-foreground">Label (optional, e.g. &quot;Lunch Break&quot;)</label>
                 <input value={form.label} onChange={e => setForm(f => ({ ...f, label: e.target.value }))} placeholder="Period label"
                   className="mt-1 w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50" />
               </div>

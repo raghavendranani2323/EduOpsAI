@@ -231,8 +231,8 @@ export function PlansClient({ plans: initial, classes }: Props) {
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
           <div className="absolute inset-0 bg-black/40" onClick={() => setDeleting(null)} />
           <div className="relative bg-background rounded-t-2xl sm:rounded-2xl w-full sm:max-w-sm p-5 space-y-4 shadow-xl">
-            <h2 className="font-semibold">Delete "{deleting.name}"?</h2>
-            <p className="text-sm text-muted-foreground">This won't delete existing invoices.</p>
+            <h2 className="font-semibold">Delete &quot;{deleting.name}&quot;?</h2>
+            <p className="text-sm text-muted-foreground">This won&apos;t delete existing invoices.</p>
             {error && <p className="text-destructive text-sm">{error}</p>}
             <div className="flex gap-2">
               <button onClick={() => setDeleting(null)} className="flex-1 border rounded-xl py-2.5 text-sm font-medium min-h-[44px]">Cancel</button>

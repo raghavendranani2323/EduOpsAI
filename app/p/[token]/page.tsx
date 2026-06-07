@@ -186,7 +186,7 @@ export default async function ParentPortalPage({ params }: { params: Promise<{ t
         </Section>
 
         <footer className="text-center text-xs text-muted-foreground pt-4">
-          You're viewing a secure private link for {student.fullName}.
+          You&apos;re viewing a secure private link for {student.fullName}.
           <br />
           Do not share with anyone outside the family.
         </footer>

@@ -1,5 +1,7 @@
 // Razorpay server-side client helpers
 
+import { createHmac } from "crypto";
+
 export function getRazorpayKeys() {
   const keyId     = process.env.RAZORPAY_KEY_ID;
   const keySecret = process.env.RAZORPAY_KEY_SECRET;
@@ -50,9 +52,8 @@ export function verifyRazorpaySignature(params: {
   signature: string;
 }): boolean {
   const { keySecret } = getRazorpayKeys();
-  const crypto = require("crypto") as typeof import("crypto");
   const body   = `${params.orderId}|${params.paymentId}`;
-  const expected = crypto.createHmac("sha256", keySecret).update(body).digest("hex");
+  const expected = createHmac("sha256", keySecret).update(body).digest("hex");
   return expected === params.signature;
 }
 
@@ -61,7 +62,6 @@ export function verifyWebhookSignature(rawBody: string, signature: string): bool
   if (!secret) {
     throw new Error("RAZORPAY_WEBHOOK_SECRET is not set — refusing to process webhooks");
   }
-  const crypto = require("crypto") as typeof import("crypto");
-  const expected = crypto.createHmac("sha256", secret).update(rawBody).digest("hex");
+  const expected = createHmac("sha256", secret).update(rawBody).digest("hex");
   return expected === signature;
 }

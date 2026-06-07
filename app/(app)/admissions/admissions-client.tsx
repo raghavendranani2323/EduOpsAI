@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -141,7 +141,7 @@ function LeadCard({ lead, onClick, today }: { lead: Lead; onClick: () => void; t
       )}
 
       {lead.lastNote && (
-        <p className="text-xs text-muted-foreground line-clamp-2 italic">"{lead.lastNote}"</p>
+        <p className="text-xs text-muted-foreground line-clamp-2 italic">&quot;{lead.lastNote}&quot;</p>
       )}
     </div>
   );
@@ -206,7 +206,6 @@ export function AdmissionsClient({ leads: initial, classes, dueTodayCount }: Pro
     register: regConvert,
     handleSubmit: handleConvert,
     reset: resetConvert,
-    formState: { errors: convertErrors },
   } = useForm<ConvertData>({
     resolver: zodResolver(convertSchema) as Resolver<ConvertData>,
   });
