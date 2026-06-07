@@ -45,8 +45,8 @@ export function LoginForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-      <div className="space-y-1.5">
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+      <div className="space-y-2">
         <Label htmlFor="email">Email</Label>
         <Input
           id="email"
@@ -55,10 +55,10 @@ export function LoginForm() {
           placeholder="you@school.edu"
           {...register("email")}
         />
-        {errors.email && <p className="text-destructive text-xs">{errors.email.message}</p>}
+        {errors.email && <p className="text-destructive text-xs mt-1">{errors.email.message}</p>}
       </div>
 
-      <div className="space-y-1.5">
+      <div className="space-y-2">
         <Label htmlFor="password">Password</Label>
         <div className="relative">
           <Input

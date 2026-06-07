@@ -39,21 +39,23 @@ export function TopBar({ institutionName, userEmail }: TopBarProps) {
 
   return (
     <>
-      <header className="md:hidden sticky top-0 z-40 bg-background/95 backdrop-blur-md border-b flex items-center gap-2 px-3 h-14">
+      <header className="md:hidden sticky top-0 z-40 glass border-b border-border/60 flex items-center gap-1 px-3 h-14">
         <button
           onClick={() => setOpen(true)}
-          className="tap p-2 -ml-2 rounded-lg active:bg-muted"
+          className="tap h-10 w-10 -ml-1 rounded-xl flex items-center justify-center active:bg-muted transition-colors"
           aria-label="Open menu"
         >
           <Menu className="h-5 w-5" />
         </button>
-        <div className="flex items-center gap-2 flex-1 min-w-0">
-          <GraduationCap className="h-5 w-5 text-primary shrink-0" />
-          <span className="font-semibold text-sm truncate">{institutionName}</span>
+        <div className="flex items-center gap-2 flex-1 min-w-0 px-1">
+          <div className="h-7 w-7 rounded-lg bg-primary text-primary-foreground flex items-center justify-center shrink-0">
+            <GraduationCap className="h-4 w-4" />
+          </div>
+          <span className="font-semibold text-sm truncate tracking-tight">{institutionName}</span>
         </div>
         <Link
           href="/settings"
-          className="tap h-9 w-9 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-semibold"
+          className="tap h-9 w-9 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-bold ring-1 ring-primary/20"
           aria-label="Account"
         >
           {initial}
@@ -73,16 +75,18 @@ export function TopBar({ institutionName, userEmail }: TopBarProps) {
                   key={href}
                   href={href}
                   onClick={() => setOpen(false)}
-                  className="flex flex-col items-center gap-1.5 border rounded-xl p-3 hover:bg-muted/50 transition-colors active:scale-[0.98]"
+                  className="flex flex-col items-center gap-2 rounded-2xl border border-border bg-card p-3.5 transition-all hover:bg-[var(--surface-1)] hover:-translate-y-0.5 hover:shadow-md active:scale-[0.97]"
                 >
-                  <Icon className="h-5 w-5 text-primary" />
-                  <span className="text-[11px] font-medium text-center leading-tight">{label}</span>
+                  <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                    <Icon className="h-5 w-5 text-primary" />
+                  </div>
+                  <span className="text-[11px] font-semibold text-center leading-tight">{label}</span>
                 </Link>
               ))}
             </div>
             <button
               onClick={signOut}
-              className="mt-4 w-full flex items-center justify-center gap-2 border border-destructive/30 text-destructive rounded-xl py-3 text-sm font-medium hover:bg-destructive/10 transition-colors"
+              className="mt-5 w-full flex items-center justify-center gap-2 border border-destructive/30 text-destructive rounded-xl py-3 text-sm font-semibold hover:bg-destructive/10 transition-colors"
             >
               <LogOut className="h-4 w-4" />
               Sign out

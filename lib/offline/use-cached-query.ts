@@ -1,11 +1,14 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { useQuery, type UseQueryOptions } from "@tanstack/react-query";
 import { cacheGet, cacheSet } from "./db";
 
 interface Options<T> extends Omit<UseQueryOptions<T, Error, T, readonly unknown[]>, "queryKey" | "queryFn"> {
   cacheKey: string;
+  /** When true the query won't run on mount — only on `refetch()` or window focus.
+   *  Use this when SSR already hydrated the data; the client query just supports offline fallback. */
+  ssrSeeded?: boolean;
 }
 
 export function useCachedQuery<T>(
@@ -26,21 +29,15 @@ export function useCachedQuery<T>(
         throw err;
       }
     },
-    placeholderData: (prev) => prev,
-    staleTime: 30_000,
+    staleTime: opts.ssrSeeded ? Infinity : 30_000,
     refetchOnWindowFocus: false,
+    refetchOnMount: opts.ssrSeeded ? false : true,
     ...opts,
   });
 
-  const hydrated = useRef(false);
+  // Writethrough cache on initial data so it survives offline reloads.
   useEffect(() => {
-    if (hydrated.current || result.data) return;
-    hydrated.current = true;
-    cacheGet<T>(opts.cacheKey).then(cached => {
-      if (cached && !result.data) {
-        // hydrate via cache; query will still run in background
-      }
-    });
+    if (result.data) cacheSet(opts.cacheKey, result.data);
   }, [opts.cacheKey, result.data]);
 
   return result;

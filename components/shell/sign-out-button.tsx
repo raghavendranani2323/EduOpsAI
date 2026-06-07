@@ -49,11 +49,11 @@ export function SignOutButton({ className, variant = "sidebar" }: SignOutButtonP
       onClick={signOut}
       disabled={loading}
       className={cn(
-        "flex w-full items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-60",
+        "flex w-full items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-60 active:scale-[0.98]",
         className
       )}
     >
-      <LogOut className="h-4 w-4 shrink-0" />
+      <LogOut className="h-4 w-4 shrink-0" strokeWidth={2} />
       {loading ? "Signing out..." : "Sign out"}
     </button>
   );

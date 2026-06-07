@@ -19,7 +19,7 @@ export function BottomNav() {
 
   return (
     <nav
-      className="fixed bottom-0 inset-x-0 z-50 bg-card/95 backdrop-blur-md border-t flex md:hidden"
+      className="fixed bottom-0 inset-x-0 z-50 glass border-t border-border/60 flex md:hidden"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
       <LayoutGroup id="bottom-nav">
@@ -30,20 +30,21 @@ export function BottomNav() {
               key={href}
               href={href}
               prefetch
-              className="flex-1 relative flex flex-col items-center justify-center gap-1 py-2.5 text-[10px] font-medium"
+              className="flex-1 relative flex flex-col items-center justify-center gap-1 py-2.5 text-[10px] font-semibold tracking-wide"
             >
               {active && (
                 <motion.span
                   layoutId="nav-pill"
-                  className="absolute inset-x-3 top-1 bottom-1 rounded-2xl bg-primary/12"
-                  transition={{ type: "spring", stiffness: 380, damping: 32 }}
+                  className="absolute inset-x-3 top-1.5 bottom-1.5 rounded-2xl bg-primary/10 ring-1 ring-primary/15"
+                  transition={{ type: "spring", stiffness: 420, damping: 34 }}
                 />
               )}
               <Icon
                 className={cn(
-                  "h-5 w-5 relative transition-colors",
-                  active ? "text-primary stroke-[2.4]" : "text-muted-foreground",
+                  "h-[22px] w-[22px] relative transition-colors",
+                  active ? "text-primary" : "text-muted-foreground",
                 )}
+                strokeWidth={active ? 2.4 : 1.8}
               />
               <span className={cn("relative", active ? "text-primary" : "text-muted-foreground")}>{label}</span>
             </Link>

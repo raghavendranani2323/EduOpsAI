@@ -24,86 +24,60 @@ export default async function DashboardPage() {
 
   const data = await withRls(user.id, async (tx) => {
     const isTeacher = membership.role === "TEACHER";
+    const trendStart = new Date(y, m - 7, 1);
 
-    // Keep these sequential: pg warns against concurrent queries on the same transaction client.
-    const totalStudents = await tx.student.count({ where: { institutionId: institution.id } });
-    const activeStudents = await tx.student.count({ where: { institutionId: institution.id, status: "ACTIVE" } });
-    const unmarkedToday = await tx.class.count({
-      where: {
-        institutionId: institution.id,
-        NOT: {
-          sessions: {
-            some: {
-              sessionDate: todayDt,
-              sessionLabel: "morning",
-            },
-          },
-        },
-      },
-    });
-    const overdueInvoices = await tx.invoice.count({
-      where: {
-        institutionId: institution.id,
-        status: { in: ["UNPAID", "PARTIAL"] },
-        dueDate: { lt: todayDt },
-      },
-    });
-    const feeCollected = await tx.payment.aggregate({
-      where: {
-        institutionId: institution.id,
-        paidAt: { gte: monthStart, lte: monthEnd },
-      },
-      _sum: { amount: true },
-    });
-    const feeOutstanding = await tx.invoice.aggregate({
-      where: {
-        institutionId: institution.id,
-        status: { in: ["UNPAID", "PARTIAL"] },
-        periodStart: { gte: monthStart },
-        periodEnd: { lte: monthEnd },
-      },
-      _sum: { amountDue: true, amountPaid: true },
-    });
-    const hotLeads = isTeacher ? 0 : await tx.lead.count({
-      where: {
-        institutionId: institution.id,
-        priority: "HOT",
-        stage: { notIn: ["CONVERTED", "LOST"] },
-      },
-    });
-    const followupsDue = isTeacher ? 0 : await tx.lead.count({
-      where: {
-        institutionId: institution.id,
-        nextFollowupAt: { lte: todayDt },
-        stage: { notIn: ["CONVERTED", "LOST"] },
-      },
-    });
-    const feeByMonth = isTeacher ? [] : await tx.$queryRaw<{ month: string; total: bigint }[]>`
-      SELECT to_char(date_trunc('month', "paidAt" AT TIME ZONE 'Asia/Kolkata'), 'YYYY-MM') AS month,
-             SUM(amount) AS total
-      FROM payments
-      WHERE "institutionId" = ${institution.id}
-        AND "paidAt" >= ${new Date(y, m - 7, 1)}
-      GROUP BY 1
-      ORDER BY 1
-    `;
+    // Single round-trip: all KPIs + the 6-month trend in one query.
+    const [agg, feeByMonth] = await Promise.all([
+      tx.$queryRaw<Array<{
+        total_students: bigint; active_students: bigint;
+        unmarked_today: bigint; overdue_invoices: bigint;
+        fee_collected: bigint | null; outstanding: bigint | null;
+        hot_leads: bigint; followups_due: bigint;
+      }>>`
+        SELECT
+          (SELECT COUNT(*) FROM students WHERE "institutionId" = ${institution.id})::bigint AS total_students,
+          (SELECT COUNT(*) FROM students WHERE "institutionId" = ${institution.id} AND status = 'ACTIVE')::bigint AS active_students,
+          (SELECT COUNT(*) FROM classes c WHERE c."institutionId" = ${institution.id}
+             AND NOT EXISTS (
+               SELECT 1 FROM attendance_sessions s
+               WHERE s."classId" = c.id AND s."sessionDate" = ${todayDt}::date AND s."sessionLabel" = 'morning'
+             ))::bigint AS unmarked_today,
+          (SELECT COUNT(*) FROM invoices WHERE "institutionId" = ${institution.id}
+             AND status IN ('UNPAID','PARTIAL') AND "dueDate" < ${todayDt})::bigint AS overdue_invoices,
+          (SELECT COALESCE(SUM(amount),0) FROM payments WHERE "institutionId" = ${institution.id}
+             AND "paidAt" >= ${monthStart} AND "paidAt" <= ${monthEnd})::bigint AS fee_collected,
+          (SELECT COALESCE(SUM("amountDue" - "amountPaid"),0) FROM invoices WHERE "institutionId" = ${institution.id}
+             AND status IN ('UNPAID','PARTIAL')
+             AND "periodStart" >= ${monthStart} AND "periodEnd" <= ${monthEnd})::bigint AS outstanding,
+          (CASE WHEN ${isTeacher}::bool THEN 0
+             ELSE (SELECT COUNT(*) FROM leads WHERE "institutionId" = ${institution.id}
+                     AND priority = 'HOT' AND stage NOT IN ('CONVERTED','LOST'))
+           END)::bigint AS hot_leads,
+          (CASE WHEN ${isTeacher}::bool THEN 0
+             ELSE (SELECT COUNT(*) FROM leads WHERE "institutionId" = ${institution.id}
+                     AND "nextFollowupAt" <= ${todayDt} AND stage NOT IN ('CONVERTED','LOST'))
+           END)::bigint AS followups_due
+      `,
+      isTeacher ? Promise.resolve([] as Array<{ month: string; total: bigint }>) : tx.$queryRaw<{ month: string; total: bigint }[]>`
+        SELECT to_char(date_trunc('month', "paidAt" AT TIME ZONE 'Asia/Kolkata'), 'YYYY-MM') AS month,
+               SUM(amount) AS total
+        FROM payments
+        WHERE "institutionId" = ${institution.id} AND "paidAt" >= ${trendStart}
+        GROUP BY 1 ORDER BY 1
+      `,
+    ]);
 
-    const outstanding = (feeOutstanding._sum.amountDue ?? 0) - (feeOutstanding._sum.amountPaid ?? 0);
-    const trend = feeByMonth.map((r) => ({
-      month: r.month,
-      total: Number(r.total),
-    }));
-
+    const row = agg[0];
     return {
-      totalStudents,
-      activeStudents,
-      unmarkedToday,
-      overdueInvoices,
-      feeCollected: feeCollected._sum.amount ?? 0,
-      feeOutstanding: outstanding,
-      hotLeads,
-      followupsDue,
-      trend,
+      totalStudents:   Number(row.total_students),
+      activeStudents:  Number(row.active_students),
+      unmarkedToday:   Number(row.unmarked_today),
+      overdueInvoices: Number(row.overdue_invoices),
+      feeCollected:    Number(row.fee_collected ?? 0),
+      feeOutstanding:  Number(row.outstanding ?? 0),
+      hotLeads:        Number(row.hot_leads),
+      followupsDue:    Number(row.followups_due),
+      trend:           feeByMonth.map(r => ({ month: r.month, total: Number(r.total) })),
       isTeacher,
     };
   });
@@ -125,15 +99,15 @@ export default async function DashboardPage() {
   };
 
   return (
-    <div className="p-4 md:p-6 space-y-5 max-w-2xl animate-fade-in">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">{greeting()}</h1>
-        <p className="text-muted-foreground text-sm mt-0.5">{institution.name}</p>
+    <div className="p-4 md:p-6 space-y-6 max-w-2xl animate-fade-in">
+      <div className="space-y-1">
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{institution.name}</p>
+        <h1 className="text-[28px] leading-tight font-bold tracking-tight">{greeting()}</h1>
       </div>
 
       {(data.unmarkedToday > 0 || data.overdueInvoices > 0 || data.followupsDue > 0) && (
-        <div className="space-y-2">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Action needed</p>
+        <div className="space-y-3">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Action needed</p>
           <div className="space-y-2">
             {data.unmarkedToday > 0 && (
               <ActionLink
@@ -183,28 +157,34 @@ export default async function DashboardPage() {
       )}
 
       {data.trend.length > 0 && !data.isTeacher && (
-        <div className="border rounded-xl p-4 space-y-3">
-          <p className="text-sm font-semibold">Fee collection trend</p>
-          <div className="flex items-end gap-1.5 h-24">
+        <Card className="p-5">
+          <div className="flex items-baseline justify-between mb-4">
+            <p className="text-sm font-semibold tracking-tight">Fee collection trend</p>
+            <p className="text-xs text-muted-foreground">Last 6 months</p>
+          </div>
+          <div className="flex items-end gap-2 h-28">
             {data.trend.map((t) => {
               const pct = Math.round((t.total / maxTrend) * 100);
               const mo = t.month.split("-")[1];
               return (
-                <div key={t.month} className="flex-1 flex flex-col items-center gap-1">
-                  <div className="w-full bg-primary/15 rounded-sm relative" style={{ height: `${Math.max(pct, 4)}%` }}>
-                    <div className="absolute inset-x-0 bottom-0 bg-primary rounded-sm" style={{ height: `${Math.max(pct, 4)}%` }} />
+                <div key={t.month} className="flex-1 flex flex-col items-center gap-1.5">
+                  <div className="w-full rounded-md relative overflow-hidden bg-muted h-full flex items-end">
+                    <div
+                      className="w-full rounded-md bg-gradient-to-t from-primary/80 to-primary"
+                      style={{ height: `${Math.max(pct, 4)}%` }}
+                    />
                   </div>
-                  <span className="text-xs text-muted-foreground">{MONTHS[mo]}</span>
+                  <span className="text-[10px] font-medium text-muted-foreground tracking-wide">{MONTHS[mo]}</span>
                 </div>
               );
             })}
           </div>
-        </div>
+        </Card>
       )}
 
-      <div className="space-y-2">
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Quick actions</p>
-        <div className="grid grid-cols-2 gap-2">
+      <div className="space-y-3">
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Quick actions</p>
+        <div className="grid grid-cols-2 gap-2.5">
           <QuickAction href="/attendance" icon={BookOpen} label="Attendance" />
           {!data.isTeacher && (
             <>
@@ -220,44 +200,65 @@ export default async function DashboardPage() {
 }
 
 const TONE_CLASSES = {
-  amber: "border-amber-200 bg-amber-50 dark:bg-amber-500/10 dark:border-amber-500/30 text-amber-900 dark:text-amber-200",
-  red:   "border-red-200 bg-red-50 dark:bg-red-500/10 dark:border-red-500/30 text-red-900 dark:text-red-200",
-  blue:  "border-blue-200 bg-blue-50 dark:bg-blue-500/10 dark:border-blue-500/30 text-blue-900 dark:text-blue-200",
+  amber: {
+    wrap: "border-amber-200/70 bg-gradient-to-br from-amber-50 to-amber-50/40 dark:from-amber-500/12 dark:to-amber-500/5 dark:border-amber-500/30",
+    text: "text-amber-900 dark:text-amber-100",
+    iconBg: "bg-amber-500/15 text-amber-700 dark:text-amber-300",
+  },
+  red: {
+    wrap: "border-red-200/70 bg-gradient-to-br from-red-50 to-red-50/40 dark:from-red-500/12 dark:to-red-500/5 dark:border-red-500/30",
+    text: "text-red-900 dark:text-red-100",
+    iconBg: "bg-red-500/15 text-red-700 dark:text-red-300",
+  },
+  blue: {
+    wrap: "border-blue-200/70 bg-gradient-to-br from-blue-50 to-blue-50/40 dark:from-blue-500/12 dark:to-blue-500/5 dark:border-blue-500/30",
+    text: "text-blue-900 dark:text-blue-100",
+    iconBg: "bg-blue-500/15 text-blue-700 dark:text-blue-300",
+  },
 } as const;
 
 function ActionLink({ href, icon: Icon, title, subtitle, tone }: { href: string; icon: React.ElementType; title: string; subtitle: string; tone: keyof typeof TONE_CLASSES }) {
+  const c = TONE_CLASSES[tone];
   return (
     <Link
       href={href}
-      className={`flex items-center gap-3 border rounded-xl p-3.5 transition-colors active:scale-[0.99] ${TONE_CLASSES[tone]}`}
+      className={`group flex items-center gap-3 border rounded-2xl p-3.5 transition-all active:scale-[0.99] hover:shadow-md ${c.wrap} ${c.text}`}
     >
-      <Icon className="h-5 w-5 shrink-0 opacity-80" />
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold">{title}</p>
-        <p className="text-xs opacity-80">{subtitle}</p>
+      <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ${c.iconBg}`}>
+        <Icon className="h-5 w-5" />
       </div>
-      <ArrowRight className="h-4 w-4 shrink-0 opacity-70" />
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold leading-tight">{title}</p>
+        <p className="text-xs opacity-75 mt-0.5">{subtitle}</p>
+      </div>
+      <ArrowRight className="h-4 w-4 shrink-0 opacity-60 group-hover:translate-x-0.5 transition-transform" />
     </Link>
   );
 }
 
 function Kpi({ icon: Icon, label, value, hint, valueClass }: { icon: React.ElementType; label: string; value: string; hint?: string; valueClass?: string }) {
   return (
-    <Card className="p-4 space-y-1">
-      <div className="flex items-center gap-2 text-muted-foreground">
-        <Icon className="h-4 w-4" />
-        <span className="text-xs">{label}</span>
+    <Card className="p-4">
+      <div className="flex items-center gap-2 text-muted-foreground mb-2">
+        <Icon className="h-3.5 w-3.5" strokeWidth={2} />
+        <span className="text-[11px] font-semibold uppercase tracking-wider">{label}</span>
       </div>
-      <p className={`text-2xl font-bold tabular-nums truncate ${valueClass ?? ""}`}>{value}</p>
-      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+      <p className={`text-[26px] leading-none font-bold tabular-nums tracking-tight truncate ${valueClass ?? ""}`}>{value}</p>
+      {hint && <p className="text-xs text-muted-foreground mt-2">{hint}</p>}
     </Card>
   );
 }
 
 function QuickAction({ href, icon: Icon, label }: { href: string; icon: React.ElementType; label: string }) {
   return (
-    <Link href={href} className="border rounded-xl p-3.5 text-sm font-medium hover:bg-muted transition-colors active:scale-[0.98] flex items-center gap-2">
-      <Icon className="h-4 w-4 text-primary" /> {label}
+    <Link
+      href={href}
+      className="group rounded-2xl border border-border bg-card p-4 text-sm font-semibold hover:shadow-md hover:-translate-y-0.5 hover:border-primary/30 transition-all active:scale-[0.98] flex items-center gap-3"
+    >
+      <div className="h-9 w-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+        <Icon className="h-4 w-4" />
+      </div>
+      {label}
     </Link>
   );
 }

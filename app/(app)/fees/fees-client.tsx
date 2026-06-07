@@ -72,6 +72,7 @@ export function FeesClient({ invoices: init, classes, total: initTotal, currentF
     {
       cacheKey: `fees:${qs}`,
       initialData: { invoices: init, total: initTotal, nextCursor: null },
+      ssrSeeded: true,
     },
   );
 

@@ -742,3 +742,20 @@ enum LeaveStatus {
   APPROVED
   REJECTED
 }
+
+// ─────────────────────────────────────────────
+// PUSH NOTIFICATIONS
+// ─────────────────────────────────────────────
+
+model PushSubscription {
+  endpoint  String   @id
+  userId    String?
+  p256dh    String
+  auth      String
+  ua        String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("push_subscriptions")
+}

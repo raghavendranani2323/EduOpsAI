@@ -69,6 +69,7 @@ export function StudentsClient({
     {
       cacheKey: `students:${qs}`,
       initialData: { students: initialStudents, total: initialTotal, nextCursor: initialCursor },
+      ssrSeeded: true,
     },
   );
 
