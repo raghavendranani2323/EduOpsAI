@@ -312,7 +312,7 @@ export function AttendanceSheet({ classId, date, students, existingRecords, yest
       </Sheet>
 
       {/* Sticky submit */}
-      <div className="fixed bottom-0 inset-x-0 md:left-56 bg-card/95 backdrop-blur-md border-t p-3 pb-[calc(env(safe-area-inset-bottom)+12px)] z-10 space-y-2">
+      <div className="fixed bottom-0 inset-x-0 md:left-56 bg-card/95 backdrop-blur-md border-t p-3 pb-[calc(env(safe-area-inset-bottom)+12px)] z-50 space-y-2">
         {queued && (
           <div className="flex items-center justify-center gap-1.5 text-xs text-amber-700 dark:text-amber-300 font-medium">
             <RefreshCw className="h-3 w-3 animate-pulse" />

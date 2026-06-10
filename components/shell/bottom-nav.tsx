@@ -15,9 +15,15 @@ const NAV_ITEMS = [
   { href: "/more",         icon: MoreHorizontal,   labelKey: "more"     },
 ] as const;
 
+// Routes with their own fixed bottom action bar — hide the nav so the
+// primary action (e.g. attendance Submit) is never covered.
+const FULLSCREEN_TASK_ROUTES = [/^\/attendance\/[^/]+/];
+
 export function BottomNav() {
   const pathname = usePathname();
   const { t } = useI18n();
+
+  if (FULLSCREEN_TASK_ROUTES.some(r => r.test(pathname))) return null;
 
   return (
     <nav

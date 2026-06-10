@@ -17,6 +17,12 @@ const STATUSES = [
   { value: "OVERDUE",  label: "Overdue" },
 ];
 
+function formatMonth(ym: string) {
+  const [y, m] = ym.split("-").map(Number);
+  if (!y || !m) return ym;
+  return new Date(y, m - 1, 1).toLocaleDateString("en-IN", { month: "long", year: "numeric" });
+}
+
 const STATUS_STYLES: Record<string, string> = {
   PAID:      "bg-green-100 text-green-700",
   PARTIAL:   "bg-amber-100 text-amber-700",
@@ -219,12 +225,29 @@ export function FeesClient({ invoices: init, classes, total: initTotal, currentF
           )}
         </div>
 
-        <Input
-          type="month"
-          value={currentFilters.month}
-          onChange={e => updateFilter("month", e.target.value)}
-          className="w-auto"
-        />
+        {currentFilters.month === "all" ? (
+          <button
+            onClick={() => updateFilter("month", "")}
+            className="flex items-center gap-1.5 rounded-xl bg-primary text-primary-foreground px-3 py-2 text-xs font-medium min-h-[44px]"
+          >
+            All months <X className="h-3.5 w-3.5" />
+          </button>
+        ) : (
+          <>
+            <Input
+              type="month"
+              value={currentFilters.month}
+              onChange={e => updateFilter("month", e.target.value)}
+              className="w-auto"
+            />
+            <button
+              onClick={() => updateFilter("month", "all")}
+              className="rounded-xl border px-3 py-2 text-xs font-medium min-h-[44px] hover:bg-muted"
+            >
+              All months
+            </button>
+          </>
+        )}
 
         <Select
           value={currentFilters.classId}
@@ -242,8 +265,21 @@ export function FeesClient({ invoices: init, classes, total: initTotal, currentF
       {/* List */}
       {invoices.length === 0 && (
         <div className="text-center py-12 text-muted-foreground">
-          <p className="font-medium">No invoices found</p>
-          <p className="text-sm mt-1">Try adjusting filters or <Link href="/fees/generate" className="text-primary underline">generate invoices</Link>.</p>
+          <p className="font-medium">
+            {currentFilters.month !== "all" && currentFilters.status !== "OVERDUE"
+              ? `No invoices for ${formatMonth(currentFilters.month)}`
+              : "No invoices found"}
+          </p>
+          {currentFilters.month !== "all" && currentFilters.status !== "OVERDUE" ? (
+            <button
+              onClick={() => updateFilter("month", "all")}
+              className="mt-3 rounded-xl border px-4 py-2.5 text-sm font-medium text-foreground min-h-[44px] hover:bg-muted"
+            >
+              Show all months
+            </button>
+          ) : (
+            <p className="text-sm mt-1">Try adjusting filters or <Link href="/fees/generate" className="text-primary underline">generate invoices</Link>.</p>
+          )}
         </div>
       )}
 

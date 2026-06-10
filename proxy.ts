@@ -25,7 +25,11 @@ export async function proxy(request: NextRequest) {
     }
   );
 
-  const { data: { user } } = await supabase.auth.getUser();
+  // Local JWT verification (ES256 via cached JWKS) — no per-request network
+  // round trip to Supabase Auth. Refresh still happens automatically when the
+  // token is expired. Pages remain the authoritative check (requireInstitution).
+  const { data } = await supabase.auth.getClaims();
+  const user = data?.claims ?? null;
 
   const { pathname } = request.nextUrl;
   const isAuthRoute = pathname.startsWith("/login") || pathname.startsWith("/signup") || pathname.startsWith("/accept-invite") || pathname.startsWith("/teacher-login");

@@ -23,17 +23,21 @@ export default async function FeesPage({
   const q       = sp.q?.trim() ?? "";
   const cursor  = sp.cursor  ?? "";
 
-  const [year, mon] = month.split("-").map(Number);
+  const todayDate = new Date(today);
+
+  // "all" disables the period filter. OVERDUE is always cross-month so the
+  // list matches the Overdue KPI (an overdue invoice is overdue regardless of
+  // which month it belongs to).
+  const allMonths = month === "all" || status === "OVERDUE";
+  const [year, mon] = (allMonths ? today.slice(0, 7) : month).split("-").map(Number);
   const periodStart = new Date(year, mon - 1, 1);
   const periodEnd   = new Date(year, mon, 0);
-  const todayDate   = new Date(today);
 
   const { invoices, classes, summary, total, nextCursor } = await withRls(user.id, async (tx) => {
     // Build where imperatively so TypeScript can infer include types correctly
     const where: Prisma.InvoiceWhereInput = {
       institutionId: institution.id,
-      periodStart: { gte: periodStart },
-      periodEnd:   { lte: periodEnd },
+      ...(allMonths ? {} : { periodStart: { gte: periodStart }, periodEnd: { lte: periodEnd } }),
     };
     if (classId) where.student = { classId };
     if (q) where.student       = { ...where.student as object, fullName: { contains: q, mode: "insensitive" } };
@@ -46,8 +50,7 @@ export default async function FeesPage({
 
     const summaryWhere: Prisma.InvoiceWhereInput = {
       institutionId: institution.id,
-      periodStart: { gte: periodStart },
-      periodEnd:   { lte: periodEnd },
+      ...(allMonths ? {} : { periodStart: { gte: periodStart }, periodEnd: { lte: periodEnd } }),
     };
 
     const rows = await tx.invoice.findMany({
@@ -153,10 +156,13 @@ export default async function FeesPage({
           <p className="text-lg font-bold text-amber-700">{formatINR(summary.outstanding)}</p>
           <p className="text-xs text-muted-foreground">Outstanding</p>
         </div>
-        <div className="border rounded-xl p-3 text-center">
+        <Link
+          href="/fees?status=OVERDUE"
+          className="border rounded-xl p-3 text-center hover:bg-muted/50 active:scale-[0.98] transition"
+        >
           <p className="text-2xl font-bold text-destructive">{summary.overdueCount}</p>
-          <p className="text-xs text-muted-foreground">Overdue</p>
-        </div>
+          <p className="text-xs text-muted-foreground">Overdue · view</p>
+        </Link>
       </div>
 
       <FeesClient

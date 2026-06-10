@@ -14,8 +14,10 @@ export async function GET(req: Request) {
     const cursor  = searchParams.get("cursor") ?? "";
     const PAGE_SIZE = 50;
 
+    // "all" disables the period filter; OVERDUE is always cross-month so the
+    // list matches the Overdue KPI on the fees page.
     let periodFilter = {};
-    if (month) {
+    if (month && month !== "all" && status !== "OVERDUE") {
       const [y, m] = month.split("-").map(Number);
       periodFilter = {
         periodStart: { gte: new Date(y, m - 1, 1) },
