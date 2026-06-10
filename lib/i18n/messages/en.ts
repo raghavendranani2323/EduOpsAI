@@ -1,6 +1,6 @@
 export interface Messages {
   nav: {
-    home: string; students: string; mark: string; fees: string; more: string;
+    home: string; students: string; classes: string; mark: string; fees: string; more: string;
     dashboard: string; attendance: string; exams: string; timetable: string;
     homework: string; notices: string; admissions: string; communications: string; settings: string;
   };
@@ -74,7 +74,7 @@ export interface Messages {
 
 export const en: Messages = {
   nav: {
-    home: "Home", students: "Students", mark: "Mark", fees: "Fees", more: "More",
+    home: "Home", students: "Students", classes: "Classes", mark: "Mark", fees: "Fees", more: "More",
     dashboard: "Dashboard", attendance: "Attendance", exams: "Exams", timetable: "Timetable",
     homework: "Homework", notices: "Notices", admissions: "Admissions", communications: "Communications", settings: "Settings",
   },

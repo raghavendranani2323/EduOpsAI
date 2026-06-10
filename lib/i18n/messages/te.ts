@@ -4,6 +4,7 @@ export const te: Messages = {
   nav: {
     home: "హోమ్",
     students: "విద్యార్థులు",
+    classes: "తరగతులు",
     mark: "హాజరు",
     fees: "ఫీజులు",
     more: "ఇంకా",

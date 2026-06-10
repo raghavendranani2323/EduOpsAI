@@ -2,13 +2,14 @@
 
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
 import {
-  BookOpen, ChevronDown, GraduationCap, Pencil, Plus, ShieldCheck,
+  BookOpen, ChevronDown, ChevronRight, GraduationCap, Pencil, Plus, ShieldCheck,
   Trash2, Users, UserPlus, Crown, Layers,
 } from "lucide-react";
 import type { InstitutionType } from "@prisma/client";
@@ -460,20 +461,26 @@ export function ClassesClient({
                       const sectionTeacher = personName(section.sectionTeacherId, staff);
                       return (
                         <div key={section.id} className="p-4 md:p-5 flex items-center gap-3">
-                          <div className="h-10 w-10 rounded-xl bg-muted flex items-center justify-center shrink-0">
-                            <Layers className="h-4 w-4 text-muted-foreground" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <p className="font-semibold text-sm">
-                                Section {section.section ?? "—"}
-                              </p>
-                              <Badge variant="secondary">{section._count.students} students</Badge>
+                          <Link
+                            href={`/classes/${section.id}`}
+                            className="flex items-center gap-3 flex-1 min-w-0 -m-2 p-2 rounded-xl active:bg-muted transition-colors"
+                          >
+                            <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                              <Layers className="h-4 w-4 text-primary" />
                             </div>
-                            <p className="text-xs text-muted-foreground mt-0.5">
-                              {sectionTeacher ? `Class Teacher: ${sectionTeacher}` : "No Class Teacher assigned"}
-                            </p>
-                          </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <p className="font-semibold text-sm">
+                                  Section {section.section ?? "—"}
+                                </p>
+                                <Badge variant="secondary">{section._count.students} students</Badge>
+                              </div>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                {sectionTeacher ? `Class Teacher: ${sectionTeacher}` : "No Class Teacher assigned"}
+                              </p>
+                            </div>
+                            <ChevronRight className="h-4 w-4 text-muted-foreground/50 shrink-0" />
+                          </Link>
                           <div className="flex items-center gap-1 shrink-0">
                             <Button size="iconSm" variant="ghost" onClick={() => setLeadershipSection(section)} aria-label="Leadership">
                               <Crown />

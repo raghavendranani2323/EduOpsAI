@@ -6,7 +6,7 @@ import { LazyMotion, domAnimation, m, LayoutGroup } from "framer-motion";
 import {
   LayoutDashboard, Users, CalendarCheck, IndianRupee, UserPlus,
   MessageCircle, Settings, GraduationCap, ClipboardList, BookOpen,
-  Bell, Calendar,
+  Bell, Calendar, Layers,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SignOutButton } from "@/components/shell/sign-out-button";
@@ -16,6 +16,7 @@ const NAV_SECTIONS = [
   {
     items: [
       { href: "/dashboard",  icon: LayoutDashboard, labelKey: "dashboard"  },
+      { href: "/classes",    icon: Layers,          labelKey: "classes"    },
       { href: "/students",   icon: Users,           labelKey: "students"   },
       { href: "/attendance", icon: CalendarCheck,   labelKey: "attendance" },
       { href: "/fees",       icon: IndianRupee,     labelKey: "fees"       },

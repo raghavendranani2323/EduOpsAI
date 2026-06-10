@@ -3,13 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LazyMotion, domMax, m, LayoutGroup } from "framer-motion";
-import { LayoutDashboard, Users, CalendarCheck, IndianRupee, MoreHorizontal } from "lucide-react";
+import { LayoutDashboard, Layers, CalendarCheck, IndianRupee, MoreHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/components/i18n/provider";
 
 const NAV_ITEMS = [
   { href: "/dashboard",    icon: LayoutDashboard, labelKey: "home"     },
-  { href: "/students",     icon: Users,            labelKey: "students" },
+  { href: "/classes",      icon: Layers,           labelKey: "classes"  },
   { href: "/attendance",   icon: CalendarCheck,    labelKey: "mark"     },
   { href: "/fees",         icon: IndianRupee,      labelKey: "fees"     },
   { href: "/more",         icon: MoreHorizontal,   labelKey: "more"     },
