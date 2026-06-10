@@ -1,8 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { CheckCircle2, XCircle, Clock, MinusCircle, MessageCircle, Copy, ChevronsDown, CloudOff, RefreshCw } from "lucide-react";
-import { motion } from "framer-motion";
+import { useCallback, useMemo, useState, useSyncExternalStore } from "react";
+import { CheckCircle2, XCircle, Clock, MinusCircle, MessageCircle, Copy, ChevronsDown, CloudOff, RefreshCw, MoreVertical } from "lucide-react";
 import { toast } from "sonner";
 import type { Terminology } from "@/lib/i18n/terminology";
 import { Button } from "@/components/ui/button";
@@ -37,6 +36,21 @@ interface Props {
 
 const STATUS_CYCLE: Status[] = ["PRESENT", "ABSENT", "LATE", "HALF_DAY"];
 
+function subscribeOnline(cb: () => void) {
+  window.addEventListener("online", cb);
+  window.addEventListener("offline", cb);
+  return () => {
+    window.removeEventListener("online", cb);
+    window.removeEventListener("offline", cb);
+  };
+}
+
+const noopSubscribe = () => () => {};
+
+function hintSeen(): boolean {
+  try { return localStorage.getItem("att-hint-seen") === "1"; } catch { return true; }
+}
+
 const STATUS_CONFIG: Record<Status, { label: string; full: string; color: string; bg: string; icon: React.ElementType }> = {
   PRESENT:  { label: "P",  full: "Present",  color: "text-green-700 dark:text-green-300",  bg: "bg-green-100 dark:bg-green-500/15",  icon: CheckCircle2 },
   ABSENT:   { label: "A",  full: "Absent",   color: "text-red-700 dark:text-red-300",      bg: "bg-red-100 dark:bg-red-500/15",      icon: XCircle      },
@@ -57,25 +71,26 @@ export function AttendanceSheet({ classId, date, students, existingRecords, yest
   const [saving, setSaving]       = useState(false);
   const [saved, setSaved]         = useState(false);
   const [queued, setQueued]       = useState(false);
-  const [isOnline, setIsOnline]   = useState(true);
+  const isOnline = useSyncExternalStore(subscribeOnline, () => navigator.onLine, () => true);
   const [alerts, setAlerts]       = useState<Array<{ studentId: string; studentName: string; guardianName: string | null; guardianPhone: string; link: string }>>([]);
   const [notified, setNotified]   = useState<Record<string, boolean>>({});
   const [pickerStudent, setPickerStudent] = useState<AttStudent | null>(null);
+  const [hintDismissed, setHintDismissed] = useState(false);
+  // server snapshot: true (hidden) — hint only appears after hydration on first visit
+  const seen = useSyncExternalStore(noopSubscribe, hintSeen, () => true);
+  const showHint = !seen && !hintDismissed;
 
-  useEffect(() => {
-    if (typeof navigator === "undefined") return;
-    setIsOnline(navigator.onLine);
-    const on  = () => setIsOnline(true);
-    const off = () => setIsOnline(false);
-    window.addEventListener("online", on);
-    window.addEventListener("offline", off);
-    return () => {
-      window.removeEventListener("online", on);
-      window.removeEventListener("offline", off);
-    };
-  }, []);
+  function dismissHint() {
+    setHintDismissed(true);
+    try { localStorage.setItem("att-hint-seen", "1"); } catch { /* private mode */ }
+  }
+
+  const buzz = () => {
+    if (typeof navigator !== "undefined" && "vibrate" in navigator) navigator.vibrate(10);
+  };
 
   const toggle = useCallback((studentId: string) => {
+    buzz();
     setStatusMap(prev => {
       const cur = prev[studentId] ?? "PRESENT";
       const next = STATUS_CYCLE[(STATUS_CYCLE.indexOf(cur) + 1) % STATUS_CYCLE.length];
@@ -87,6 +102,7 @@ export function AttendanceSheet({ classId, date, students, existingRecords, yest
   }, []);
 
   const setStatus = useCallback((studentId: string, status: Status) => {
+    buzz();
     setStatusMap(prev => ({ ...prev, [studentId]: status }));
     setTouched(prev => { const n = new Set(prev); n.add(studentId); return n; });
     setSaved(false);
@@ -137,6 +153,7 @@ export function AttendanceSheet({ classId, date, students, existingRecords, yest
 
     setSaved(true);
     setQueued(false);
+    if (typeof navigator !== "undefined" && "vibrate" in navigator) navigator.vibrate([15, 50, 15]);
     const result = outcome.response as { alerts?: Array<{ studentId: string; studentName: string; guardianName: string | null; guardianPhone: string; link: string }> };
     setAlerts(result.alerts ?? []);
     toast.success(isEdit ? "Attendance updated" : "Attendance saved", {
@@ -204,45 +221,58 @@ export function AttendanceSheet({ classId, date, students, existingRecords, yest
         )}
       </div>
 
+      {/* First-run hint */}
+      {showHint && (
+        <div className="flex items-center gap-2 px-4 py-2 bg-primary/5 border-b text-xs text-muted-foreground animate-fade-in">
+          <span className="flex-1">Tap a student to cycle P → A → L → HD, or use <MoreVertical className="inline h-3 w-3" /> to pick directly.</span>
+          <button onClick={dismissHint} className="tap font-semibold text-primary shrink-0">Got it</button>
+        </div>
+      )}
+
       {/* Student list */}
       <div className="flex-1 overflow-y-auto pb-32">
-        {students.map((student, idx) => {
+        {students.map((student) => {
           const status = statusMap[student.id] ?? "PRESENT";
           const cfg    = STATUS_CONFIG[status];
           const Icon   = cfg.icon;
           const isTouched = touched.has(student.id);
 
           return (
-            <motion.button
+            <div
               key={student.id}
-              initial={{ opacity: 0, y: 4 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.15, delay: Math.min(idx * 0.01, 0.2) }}
-              onClick={() => toggle(student.id)}
-              onContextMenu={(e) => { e.preventDefault(); setPickerStudent(student); }}
-              className={`w-full flex items-center gap-3 px-4 py-3 border-b text-left transition-colors active:bg-muted/60 ${status !== "PRESENT" ? "bg-red-50/40 dark:bg-red-500/5" : ""}`}
+              className={`flex items-stretch border-b ${status !== "PRESENT" ? "bg-red-50/40 dark:bg-red-500/5" : ""}`}
             >
-              <div className="h-10 w-10 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-semibold shrink-0">
-                {student.fullName.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-medium text-sm truncate">{student.fullName}</p>
-                <p className="text-xs text-muted-foreground">
-                  {student.admissionNo ?? "—"}
-                  {!isTouched && <span className="ml-2 text-amber-600 dark:text-amber-400">· unmarked</span>}
-                </p>
-              </div>
-              <motion.div
-                key={status}
-                initial={{ scale: 0.85 }}
-                animate={{ scale: 1 }}
-                transition={{ type: "spring", stiffness: 480, damping: 22 }}
-                className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 min-w-[64px] justify-center ${cfg.bg} ${cfg.color}`}
+              <button
+                onClick={() => toggle(student.id)}
+                onContextMenu={(e) => { e.preventDefault(); setPickerStudent(student); }}
+                className="flex-1 min-w-0 flex items-center gap-3 px-4 py-3 text-left transition-colors active:bg-muted/60"
               >
-                <Icon className="h-3.5 w-3.5" />
-                <span className="text-xs font-bold">{cfg.label}</span>
-              </motion.div>
-            </motion.button>
+                <div className="h-10 w-10 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-semibold shrink-0">
+                  {student.fullName.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-sm truncate">{student.fullName}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {student.admissionNo ?? "—"}
+                    {!isTouched && <span className="ml-2 text-amber-600 dark:text-amber-400">· unmarked</span>}
+                  </p>
+                </div>
+                <span
+                  key={status}
+                  className={`animate-status-pop flex items-center gap-1.5 rounded-full px-3 py-1.5 min-w-[64px] justify-center ${cfg.bg} ${cfg.color}`}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  <span className="text-xs font-bold">{cfg.label}</span>
+                </span>
+              </button>
+              <button
+                onClick={() => setPickerStudent(student)}
+                aria-label={`Set status for ${student.fullName}`}
+                className="px-3 flex items-center text-muted-foreground active:bg-muted/60 transition-colors"
+              >
+                <MoreVertical className="h-4 w-4" />
+              </button>
+            </div>
           );
         })}
       </div>

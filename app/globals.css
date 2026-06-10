@@ -117,6 +117,16 @@ input, select, textarea {
 }
 .animate-fade-in { animation: fade-in 200ms cubic-bezier(0.2, 0.8, 0.2, 1); }
 
+@keyframes status-pop {
+  from { transform: scale(0.8); }
+  to   { transform: scale(1); }
+}
+.animate-status-pop { animation: status-pop 150ms ease-out; }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in, .animate-status-pop { animation: none; }
+}
+
 @keyframes shimmer {
   0%   { background-position: -200% 0; }
   100% { background-position: 200% 0; }

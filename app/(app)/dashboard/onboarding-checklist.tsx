@@ -38,6 +38,39 @@ export function OnboardingChecklist({
 
   const pct = Math.round((completed / total) * 100);
 
+  // Past the halfway mark the school is up and running — collapse to a single
+  // line so KPIs stay above the fold. Native <details>, no client JS.
+  if (completed > total / 2) {
+    const next = steps.find(s => !s.done);
+    return (
+      <details className="group rounded-2xl border border-primary/30 bg-primary/5 dark:bg-primary/10">
+        <summary className="flex items-center gap-3 px-4 py-3 cursor-pointer list-none [&::-webkit-details-marker]:hidden min-h-[44px]">
+          <Rocket className="h-4 w-4 text-primary shrink-0" />
+          <span className="flex-1 text-sm font-semibold truncate">
+            Setup {completed}/{total}{next ? ` · next: ${next.title}` : ""}
+          </span>
+          <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0 transition-transform group-open:rotate-90" />
+        </summary>
+        <ul className="px-3 pb-3 space-y-1">
+          {steps.map((step) => (
+            <li key={step.href}>
+              <Link
+                href={step.href}
+                className={`flex items-center gap-3 rounded-xl px-2.5 py-2 transition-colors hover:bg-primary/5 ${step.done ? "opacity-60" : ""}`}
+              >
+                {step.done
+                  ? <CheckCircle2 className="h-5 w-5 text-primary shrink-0" />
+                  : <Circle className="h-5 w-5 text-muted-foreground shrink-0" />
+                }
+                <span className={`text-sm font-semibold ${step.done ? "line-through" : ""}`}>{step.title}</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </details>
+    );
+  }
+
   return (
     <Card className="overflow-hidden border-primary/30 bg-primary/5 dark:bg-primary/10">
       <div className="p-4 sm:p-5">

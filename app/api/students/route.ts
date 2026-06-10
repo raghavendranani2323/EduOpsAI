@@ -58,7 +58,11 @@ export async function GET(req: Request) {
             take: 1,
           },
         },
-        orderBy: { fullName: "asc" },
+        orderBy: [
+          { class: { name: "asc" } },
+          { admissionNo: { sort: "asc", nulls: "last" } },
+          { fullName: "asc" },
+        ],
         take: PAGE_SIZE + 1,
         ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
       })

@@ -19,7 +19,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         }),
         tx.student.findMany({
           where: { institutionId: institution.id, status: "ACTIVE", ...(exam.classId ? { classId: exam.classId } : {}) },
-          orderBy: { fullName: "asc" },
+          orderBy: [{ admissionNo: { sort: "asc", nulls: "last" } }, { fullName: "asc" }],
         }),
         tx.examResult.findMany({
           where: { examId, institutionId: institution.id },

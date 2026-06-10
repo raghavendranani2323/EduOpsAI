@@ -54,7 +54,12 @@ export default async function StudentsPage({
             take: 1,
           },
         },
-        orderBy: { fullName: "asc" },
+        // Indian schools scan by class + roll/admission no., not first name
+        orderBy: [
+          { class: { name: "asc" } },
+          { admissionNo: { sort: "asc", nulls: "last" } },
+          { fullName: "asc" },
+        ],
         take: PAGE_SIZE + 1,
         ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
       }),

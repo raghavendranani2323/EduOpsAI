@@ -42,7 +42,8 @@ export default async function AttendanceClassPage({
     const [students, existingSession, yesterdaySession] = await Promise.all([
       tx.student.findMany({
         where: { institutionId: institution.id, classId, status: "ACTIVE" },
-        orderBy: { fullName: "asc" },
+        // Roll-order: teachers call out the register by admission no.
+        orderBy: [{ admissionNo: { sort: "asc", nulls: "last" } }, { fullName: "asc" }],
         select: { id: true, fullName: true, admissionNo: true, gender: true },
       }),
       tx.attendanceSession.findFirst({
