@@ -2,7 +2,7 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 
 const baseField = [
-  "flex w-full rounded-xl",
+  "flex w-full rounded-[0.875rem]",
   "bg-[var(--surface-1)] border border-border",
   "px-3.5 text-sm text-foreground",
   "placeholder:text-muted-foreground/70",

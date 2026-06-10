@@ -4,12 +4,12 @@ import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
   [
-    "relative inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl",
+    "relative inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full",
     "text-sm font-semibold tracking-tight",
-    "transition-[transform,box-shadow,background-color,color] duration-150 ease-out",
+    "transition-[transform,box-shadow,background-color,color,border-color] duration-200 ease-out",
     "focus-visible:outline-none",
     "disabled:pointer-events-none disabled:opacity-50",
-    "active:scale-[0.97]",
+    "active:scale-[0.96]",
     "[&_svg]:pointer-events-none [&_svg]:shrink-0",
     "select-none",
   ].join(" "),
@@ -18,16 +18,22 @@ const buttonVariants = cva(
       variant: {
         default: [
           "bg-primary text-primary-foreground",
-          "shadow-sm hover:shadow-md",
-          "hover:bg-[color-mix(in_oklch,var(--primary)_92%,black)]",
+          "shadow-sm hover:shadow-glow hover:-translate-y-px",
+          "hover:bg-[color-mix(in_oklch,var(--primary)_90%,black)]",
+          "dark:hover:bg-[color-mix(in_oklch,var(--primary)_92%,white)]",
+        ].join(" "),
+        accent: [
+          "bg-accent text-accent-foreground",
+          "shadow-sm hover:shadow-md hover:-translate-y-px",
+          "hover:bg-[color-mix(in_oklch,var(--accent)_92%,black)]",
         ].join(" "),
         secondary: [
           "bg-[var(--surface-2)] text-foreground border border-border",
-          "hover:bg-muted",
+          "hover:bg-muted hover:border-[color-mix(in_oklch,var(--border)_60%,var(--primary))]",
         ].join(" "),
         outline: [
           "border border-border bg-card",
-          "shadow-xs hover:bg-[var(--surface-1)] hover:border-[color-mix(in_oklch,var(--border)_70%,var(--primary))]",
+          "shadow-xs hover:bg-[var(--surface-1)] hover:border-[color-mix(in_oklch,var(--border)_55%,var(--primary))]",
         ].join(" "),
         ghost: "text-foreground hover:bg-muted",
         destructive: [
@@ -40,13 +46,18 @@ const buttonVariants = cva(
           "shadow-sm hover:shadow-md",
           "hover:bg-[color-mix(in_oklch,var(--success)_92%,black)]",
         ].join(" "),
+        ink: [
+          "bg-ink text-ink-foreground",
+          "shadow-sm hover:shadow-lg hover:-translate-y-px",
+          "hover:bg-[var(--ink-2)]",
+        ].join(" "),
         link: "text-primary underline-offset-4 hover:underline px-0",
       },
       size: {
-        sm:     "h-9 px-3 text-xs [&_svg]:size-3.5",
-        md:     "h-11 px-4 [&_svg]:size-4",
-        lg:     "h-12 px-5 text-base [&_svg]:size-[18px]",
-        xl:     "h-14 px-6 text-base [&_svg]:size-5",
+        sm:     "h-9 px-4 text-xs [&_svg]:size-3.5",
+        md:     "h-11 px-5 [&_svg]:size-4",
+        lg:     "h-12 px-6 text-base [&_svg]:size-[18px]",
+        xl:     "h-14 px-7 text-base [&_svg]:size-5",
         icon:   "h-11 w-11 [&_svg]:size-4",
         iconSm: "h-9 w-9 [&_svg]:size-3.5",
         iconLg: "h-12 w-12 [&_svg]:size-5",

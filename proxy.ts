@@ -35,6 +35,7 @@ export async function proxy(request: NextRequest) {
   const isAuthRoute = pathname.startsWith("/login") || pathname.startsWith("/signup") || pathname.startsWith("/accept-invite") || pathname.startsWith("/teacher-login");
   const isPublicRoute =
     isAuthRoute ||
+    pathname === "/" ||
     pathname.startsWith("/api/razorpay") ||
     pathname.startsWith("/api/auth") ||
     pathname.startsWith("/onboarding") ||

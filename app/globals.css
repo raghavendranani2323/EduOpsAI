@@ -2,6 +2,7 @@
 
 @theme inline {
   --font-sans: var(--font-geist);
+  --font-display: var(--font-fraunces);
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -9,6 +10,8 @@
   --color-card-foreground: var(--card-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
   --color-border: var(--border);
@@ -19,55 +22,70 @@
   --color-warning: var(--warning);
   --color-surface-1: var(--surface-1);
   --color-surface-2: var(--surface-2);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-foreground: var(--ink-foreground);
 
   --radius-sm: 0.5rem;
-  --radius-md: 0.75rem;
-  --radius-lg: 1rem;
-  --radius-xl: 1.25rem;
-  --radius-2xl: 1.5rem;
+  --radius-md: 0.875rem;
+  --radius-lg: 1.125rem;
+  --radius-xl: 1.375rem;
+  --radius-2xl: 1.75rem;
 
-  --shadow-xs: 0 1px 2px 0 rgb(15 23 42 / 0.04);
-  --shadow-sm: 0 1px 3px 0 rgb(15 23 42 / 0.06), 0 1px 2px -1px rgb(15 23 42 / 0.04);
-  --shadow-md: 0 4px 12px -2px rgb(15 23 42 / 0.08), 0 2px 4px -1px rgb(15 23 42 / 0.04);
-  --shadow-lg: 0 12px 28px -8px rgb(15 23 42 / 0.12), 0 4px 8px -2px rgb(15 23 42 / 0.06);
-  --shadow-glow: 0 0 0 1px rgb(99 102 241 / 0.08), 0 8px 24px -8px rgb(99 102 241 / 0.25);
+  --shadow-xs: 0 1px 2px 0 oklch(25% 0.03 175 / 0.05);
+  --shadow-sm: 0 1px 3px 0 oklch(25% 0.03 175 / 0.07), 0 1px 2px -1px oklch(25% 0.03 175 / 0.05);
+  --shadow-md: 0 4px 14px -3px oklch(25% 0.03 175 / 0.1), 0 2px 5px -2px oklch(25% 0.03 175 / 0.05);
+  --shadow-lg: 0 14px 32px -10px oklch(25% 0.03 175 / 0.16), 0 4px 10px -3px oklch(25% 0.03 175 / 0.06);
+  --shadow-glow: 0 0 0 1px oklch(42% 0.085 172 / 0.1), 0 10px 28px -8px oklch(42% 0.085 172 / 0.3);
 }
 
 :root {
-  --background: oklch(99% 0.003 264);
-  --foreground: oklch(18% 0.03 264);
+  /* "Ink & Saffron" — warm paper, deep green ink, saffron accent */
+  --background: oklch(98.2% 0.007 92);
+  --foreground: oklch(23% 0.028 178);
   --card: oklch(100% 0 0);
-  --card-foreground: oklch(18% 0.03 264);
-  --surface-1: oklch(98.5% 0.005 264);
-  --surface-2: oklch(96.5% 0.008 264);
-  --primary: oklch(56% 0.21 264);
-  --primary-foreground: oklch(100% 0 0);
-  --muted: oklch(96% 0.008 264);
-  --muted-foreground: oklch(48% 0.02 264);
-  --border: oklch(92% 0.008 264);
-  --ring: oklch(56% 0.21 264 / 0.35);
-  --destructive: oklch(58% 0.22 25);
+  --card-foreground: oklch(23% 0.028 178);
+  --surface-1: oklch(96.6% 0.009 92);
+  --surface-2: oklch(94.6% 0.012 92);
+  --primary: oklch(42% 0.085 172);
+  --primary-foreground: oklch(98.5% 0.008 92);
+  --accent: oklch(73% 0.145 64);
+  --accent-foreground: oklch(30% 0.07 60);
+  --muted: oklch(95.4% 0.01 92);
+  --muted-foreground: oklch(46% 0.022 172);
+  --border: oklch(90% 0.014 96);
+  --ring: oklch(42% 0.085 172 / 0.35);
+  --destructive: oklch(55% 0.2 27);
   --destructive-foreground: oklch(100% 0 0);
-  --success: oklch(56% 0.18 152);
-  --warning: oklch(68% 0.17 75);
+  --success: oklch(52% 0.13 160);
+  --warning: oklch(70% 0.15 75);
+  /* Ink surfaces — dark chrome (sidebar, footers, hero) in both themes */
+  --ink: oklch(21% 0.03 182);
+  --ink-2: oklch(26% 0.032 182);
+  --ink-foreground: oklch(94% 0.012 120);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: oklch(14% 0.02 264);
-    --foreground: oklch(97% 0.005 264);
-    --card: oklch(18% 0.02 264);
-    --card-foreground: oklch(97% 0.005 264);
-    --surface-1: oklch(16% 0.02 264);
-    --surface-2: oklch(20% 0.02 264);
-    --primary: oklch(70% 0.18 264);
-    --primary-foreground: oklch(14% 0.02 264);
-    --muted: oklch(22% 0.02 264);
-    --muted-foreground: oklch(68% 0.02 264);
-    --border: oklch(26% 0.02 264);
-    --ring: oklch(70% 0.18 264 / 0.45);
+    --background: oklch(14.5% 0.016 182);
+    --foreground: oklch(95.5% 0.01 120);
+    --card: oklch(18.5% 0.02 182);
+    --card-foreground: oklch(95.5% 0.01 120);
+    --surface-1: oklch(17% 0.018 182);
+    --surface-2: oklch(21% 0.022 182);
+    --primary: oklch(80% 0.115 162);
+    --primary-foreground: oklch(17% 0.025 182);
+    --accent: oklch(76% 0.135 70);
+    --accent-foreground: oklch(22% 0.05 60);
+    --muted: oklch(23% 0.02 182);
+    --muted-foreground: oklch(69% 0.018 165);
+    --border: oklch(27% 0.02 182);
+    --ring: oklch(80% 0.115 162 / 0.45);
     --destructive: oklch(64% 0.22 25);
     --destructive-foreground: oklch(100% 0 0);
+    --ink: oklch(12% 0.015 182);
+    --ink-2: oklch(17.5% 0.02 182);
+    --ink-foreground: oklch(94% 0.012 120);
   }
 }
 
@@ -89,8 +107,19 @@ body {
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
 }
 
-h1, h2, h3, h4 { letter-spacing: -0.02em; }
+h1, h2 {
+  font-family: var(--font-fraunces), var(--font-geist), serif;
+  letter-spacing: -0.015em;
+  font-weight: 600;
+}
+h3, h4 { letter-spacing: -0.02em; }
+.font-display { font-family: var(--font-fraunces), var(--font-geist), serif; }
 .tabular-nums { font-variant-numeric: tabular-nums; }
+
+/* Fluid display type — scales with viewport, no fixed breakpoints */
+.text-fluid-hero  { font-size: clamp(2.25rem, 1.2rem + 5.2vw, 4.5rem);  line-height: 1.04; }
+.text-fluid-title { font-size: clamp(1.65rem, 1.1rem + 2.6vw, 2.75rem); line-height: 1.12; }
+.text-fluid-lead  { font-size: clamp(1rem, 0.92rem + 0.5vw, 1.2rem);    line-height: 1.6; }
 
 .tap {
   min-height: 44px;
@@ -104,12 +133,13 @@ input, select, textarea {
   input, select, textarea { font-size: 14px; }
 }
 
-/* Premium focus ring */
 :where(button, a, input, select, textarea, [role="button"]):focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--ring);
   border-radius: 0.75rem;
 }
+
+/* ----- Motion system ----- */
 
 @keyframes fade-in {
   from { opacity: 0; transform: translateY(4px); }
@@ -117,14 +147,45 @@ input, select, textarea {
 }
 .animate-fade-in { animation: fade-in 200ms cubic-bezier(0.2, 0.8, 0.2, 1); }
 
+@keyframes page-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-page-in { animation: page-in 320ms cubic-bezier(0.22, 1, 0.36, 1); }
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-rise { animation: rise 500ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+
 @keyframes status-pop {
   from { transform: scale(0.8); }
   to   { transform: scale(1); }
 }
 .animate-status-pop { animation: status-pop 150ms ease-out; }
 
+@keyframes float-soft {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-10px); }
+}
+.animate-float { animation: float-soft 6s ease-in-out infinite; }
+
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+.animate-marquee { animation: marquee 30s linear infinite; }
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.35; }
+}
+.animate-pulse-dot { animation: pulse-dot 2s ease-in-out infinite; }
+
 @media (prefers-reduced-motion: reduce) {
-  .animate-fade-in, .animate-status-pop { animation: none; }
+  .animate-fade-in, .animate-status-pop, .animate-page-in, .animate-rise,
+  .animate-float, .animate-marquee, .animate-pulse-dot { animation: none; }
 }
 
 @keyframes shimmer {
@@ -150,9 +211,30 @@ input, select, textarea {
   -webkit-backdrop-filter: saturate(180%) blur(18px);
 }
 
-/* Subtle dotted background for hero sections (optional accent) */
+/* Dotted texture for ink surfaces */
 .hero-grid {
   background-image:
     radial-gradient(circle at 1px 1px, rgb(255 255 255 / 0.08) 1px, transparent 0);
   background-size: 24px 24px;
+}
+
+/* Ruled-notebook texture for paper surfaces */
+.paper-lines {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 31px,
+    color-mix(in oklch, var(--primary) 7%, transparent) 31px,
+    color-mix(in oklch, var(--primary) 7%, transparent) 32px
+  );
+}
+
+/* Soft radial glow accents */
+.glow-primary {
+  background: radial-gradient(ellipse at center,
+    color-mix(in oklch, var(--primary) 22%, transparent) 0%, transparent 70%);
+}
+.glow-accent {
+  background: radial-gradient(ellipse at center,
+    color-mix(in oklch, var(--accent) 26%, transparent) 0%, transparent 70%);
 }

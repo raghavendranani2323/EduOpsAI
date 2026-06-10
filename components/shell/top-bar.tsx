@@ -50,14 +50,14 @@ export function TopBar({ institutionName, userEmail }: TopBarProps) {
           <Menu className="h-5 w-5" />
         </button>
         <div className="flex items-center gap-2 flex-1 min-w-0 px-1">
-          <div className="h-7 w-7 rounded-lg bg-primary text-primary-foreground flex items-center justify-center shrink-0">
+          <div className="h-7 w-7 rounded-lg bg-accent text-accent-foreground flex items-center justify-center shrink-0 shadow-xs">
             <GraduationCap className="h-4 w-4" />
           </div>
-          <span className="font-semibold text-sm truncate tracking-tight">{institutionName}</span>
+          <span className="font-display font-semibold text-sm truncate tracking-tight">{institutionName}</span>
         </div>
         <Link
           href="/settings"
-          className="tap h-9 w-9 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-bold ring-1 ring-primary/20"
+          className="tap h-9 w-9 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-bold shadow-sm"
           aria-label="Account"
         >
           {initial}

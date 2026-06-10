@@ -51,7 +51,7 @@ export function SignOutButton({ className, variant = "sidebar" }: SignOutButtonP
       onClick={signOut}
       disabled={loading}
       className={cn(
-        "flex w-full items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-60 active:scale-[0.98]",
+        "flex w-full items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-medium text-ink-foreground/55 hover:bg-white/5 hover:text-ink-foreground transition-colors disabled:opacity-60 active:scale-[0.98]",
         className
       )}
     >

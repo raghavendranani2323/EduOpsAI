@@ -45,7 +45,14 @@ export function BottomNav() {
               {active && (
                 <m.span
                   layoutId="nav-pill"
-                  className="absolute inset-x-3 top-1.5 bottom-1.5 rounded-2xl bg-primary/10 ring-1 ring-primary/15"
+                  className="absolute inset-x-3 top-1.5 bottom-1.5 rounded-2xl bg-primary/10 ring-1 ring-primary/20"
+                  transition={{ type: "spring", stiffness: 420, damping: 34 }}
+                />
+              )}
+              {active && (
+                <m.span
+                  layoutId="nav-dot"
+                  className="absolute top-0.5 h-1 w-5 rounded-full bg-accent"
                   transition={{ type: "spring", stiffness: 420, damping: 34 }}
                 />
               )}
