@@ -27,47 +27,57 @@ export function BottomNav() {
 
   return (
     <nav
-      className="fixed bottom-0 inset-x-0 z-50 glass border-t border-border/60 flex md:hidden"
+      className={cn(
+        "fixed bottom-0 inset-x-0 z-50 md:hidden",
+        "bg-card dark:bg-[var(--surface-2)]",
+        "border-t border-border",
+        "shadow-[0_-8px_24px_-12px_oklch(25%_0.03_175_/_0.25)]",
+      )}
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
       <LazyMotion features={domMax} strict>
-      <LayoutGroup id="bottom-nav">
-        {NAV_ITEMS.map(({ href, icon: Icon, labelKey }) => {
-          const active = pathname === href || pathname.startsWith(href + "/");
-          const label = t("nav", labelKey);
-          return (
-            <Link
-              key={href}
-              href={href}
-              prefetch
-              className="flex-1 relative flex flex-col items-center justify-center gap-1 py-2.5 text-[10px] font-semibold tracking-wide"
-            >
-              {active && (
-                <m.span
-                  layoutId="nav-pill"
-                  className="absolute inset-x-3 top-1.5 bottom-1.5 rounded-2xl bg-primary/10 ring-1 ring-primary/20"
-                  transition={{ type: "spring", stiffness: 420, damping: 34 }}
-                />
-              )}
-              {active && (
-                <m.span
-                  layoutId="nav-dot"
-                  className="absolute top-0.5 h-1 w-5 rounded-full bg-accent"
-                  transition={{ type: "spring", stiffness: 420, damping: 34 }}
-                />
-              )}
-              <Icon
-                className={cn(
-                  "h-[22px] w-[22px] relative transition-colors",
-                  active ? "text-primary" : "text-muted-foreground",
-                )}
-                strokeWidth={active ? 2.4 : 1.8}
-              />
-              <span className={cn("relative", active ? "text-primary" : "text-muted-foreground")}>{label}</span>
-            </Link>
-          );
-        })}
-      </LayoutGroup>
+        <LayoutGroup id="bottom-nav">
+          <div className="flex items-stretch px-1">
+            {NAV_ITEMS.map(({ href, icon: Icon, labelKey }) => {
+              const active = pathname === href || pathname.startsWith(href + "/");
+              const label = t("nav", labelKey);
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  prefetch
+                  aria-current={active ? "page" : undefined}
+                  className="flex-1 flex flex-col items-center gap-1 pt-2.5 pb-2 min-w-0 select-none active:opacity-80 transition-opacity"
+                >
+                  <span className="relative flex h-8 w-14 items-center justify-center">
+                    {active && (
+                      <m.span
+                        layoutId="nav-pill"
+                        className="absolute inset-0 rounded-full bg-primary shadow-sm"
+                        transition={{ type: "spring", stiffness: 520, damping: 40 }}
+                      />
+                    )}
+                    <Icon
+                      className={cn(
+                        "relative h-[21px] w-[21px] transition-colors duration-200",
+                        active ? "text-primary-foreground" : "text-muted-foreground",
+                      )}
+                      strokeWidth={active ? 2.4 : 1.9}
+                    />
+                  </span>
+                  <span
+                    className={cn(
+                      "text-[10.5px] leading-none tracking-wide truncate max-w-full transition-colors duration-200",
+                      active ? "font-bold text-foreground" : "font-medium text-muted-foreground",
+                    )}
+                  >
+                    {label}
+                  </span>
+                </Link>
+              );
+            })}
+          </div>
+        </LayoutGroup>
       </LazyMotion>
     </nav>
   );
