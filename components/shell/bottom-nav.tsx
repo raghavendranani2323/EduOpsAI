@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { motion, LayoutGroup } from "framer-motion";
+import { LazyMotion, domMax, m, LayoutGroup } from "framer-motion";
 import { LayoutDashboard, Users, CalendarCheck, IndianRupee, MoreHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/components/i18n/provider";
@@ -30,6 +30,7 @@ export function BottomNav() {
       className="fixed bottom-0 inset-x-0 z-50 glass border-t border-border/60 flex md:hidden"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
+      <LazyMotion features={domMax} strict>
       <LayoutGroup id="bottom-nav">
         {NAV_ITEMS.map(({ href, icon: Icon, labelKey }) => {
           const active = pathname === href || pathname.startsWith(href + "/");
@@ -42,7 +43,7 @@ export function BottomNav() {
               className="flex-1 relative flex flex-col items-center justify-center gap-1 py-2.5 text-[10px] font-semibold tracking-wide"
             >
               {active && (
-                <motion.span
+                <m.span
                   layoutId="nav-pill"
                   className="absolute inset-x-3 top-1.5 bottom-1.5 rounded-2xl bg-primary/10 ring-1 ring-primary/15"
                   transition={{ type: "spring", stiffness: 420, damping: 34 }}
@@ -60,6 +61,7 @@ export function BottomNav() {
           );
         })}
       </LayoutGroup>
+      </LazyMotion>
     </nav>
   );
 }

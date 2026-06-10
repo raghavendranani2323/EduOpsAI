@@ -88,27 +88,14 @@ const convertSchema = z.object({
 });
 type ConvertData = z.infer<typeof convertSchema>;
 
-// ─── Draggable card ──────────────────────────────────────────────────────────
+// ─── Card content (shared by kanban + mobile list) ───────────────────────────
 
-function LeadCard({ lead, onClick, today }: { lead: Lead; onClick: () => void; today: string }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: lead.id });
-
-  const style = transform
-    ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`, opacity: isDragging ? 0.4 : 1 }
-    : undefined;
-
+function LeadCardContent({ lead, today }: { lead: Lead; today: string }) {
   const isOverdue = lead.nextFollowupAt && lead.nextFollowupAt < today && lead.stage !== "CONVERTED" && lead.stage !== "LOST";
   const isDueToday = lead.nextFollowupAt === today && lead.stage !== "CONVERTED" && lead.stage !== "LOST";
 
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      {...attributes}
-      {...listeners}
-      className="bg-background border rounded-xl p-3 space-y-2 cursor-grab active:cursor-grabbing shadow-sm touch-none"
-      onClick={(e) => { e.stopPropagation(); onClick(); }}
-    >
+    <>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="font-medium text-sm truncate">{lead.studentName}</p>
@@ -143,6 +130,29 @@ function LeadCard({ lead, onClick, today }: { lead: Lead; onClick: () => void; t
       {lead.lastNote && (
         <p className="text-xs text-muted-foreground line-clamp-2 italic">&quot;{lead.lastNote}&quot;</p>
       )}
+    </>
+  );
+}
+
+// ─── Draggable card (kanban, md+) ────────────────────────────────────────────
+
+function LeadCard({ lead, onClick, today }: { lead: Lead; onClick: () => void; today: string }) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: lead.id });
+
+  const style = transform
+    ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`, opacity: isDragging ? 0.4 : 1 }
+    : undefined;
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      className="bg-background border rounded-xl p-3 space-y-2 cursor-grab active:cursor-grabbing shadow-sm touch-none"
+      onClick={(e) => { e.stopPropagation(); onClick(); }}
+    >
+      <LeadCardContent lead={lead} today={today} />
     </div>
   );
 }
@@ -196,6 +206,7 @@ export function AdmissionsClient({ leads: initial, classes, dueTodayCount }: Pro
   const [saving, setSaving]       = useState(false);
   const [error, setError]         = useState<string | null>(null);
   const [activeId, setActiveId]   = useState<string | null>(null);
+  const [mobileStage, setMobileStage] = useState("NEW");
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema) as Resolver<FormData>,
@@ -279,26 +290,30 @@ export function AdmissionsClient({ leads: initial, classes, dueTodayCount }: Pro
     setSelected(null);
   }
 
-  async function onDragEnd(event: DragEndEvent) {
-    const { active, over } = event;
-    setActiveId(null);
-    if (!over || active.id === over.id) return;
-
-    const newStage = String(over.id);
-    if (!STAGES.find(s => s.id === newStage)) return;
-
-    const lead = leads.find(l => l.id === active.id);
-    if (!lead || lead.stage === newStage) return;
+  async function moveStage(lead: Lead, newStage: string) {
+    if (lead.stage === newStage || !STAGES.find(s => s.id === newStage)) return;
 
     // Optimistic update
     setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, stage: newStage } : l));
+    setSelected(prev => prev && prev.id === lead.id ? { ...prev, stage: newStage } : prev);
 
     const res    = await fetch(`/api/leads/${lead.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ stage: newStage }) });
     const result = await res.json();
     if (!result.ok) {
       // Rollback
       setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, stage: lead.stage } : l));
+      setSelected(prev => prev && prev.id === lead.id ? { ...prev, stage: lead.stage } : prev);
     }
+  }
+
+  async function onDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    setActiveId(null);
+    if (!over || active.id === over.id) return;
+
+    const lead = leads.find(l => l.id === active.id);
+    if (!lead) return;
+    await moveStage(lead, String(over.id));
   }
 
   async function submitConvert(data: ConvertData) {
@@ -342,13 +357,58 @@ export function AdmissionsClient({ leads: initial, classes, dueTodayCount }: Pro
         </button>
       </div>
 
-      {/* Kanban board */}
+      {/* Mobile: stage chips + vertical list (no drag) */}
+      <div className="md:hidden space-y-3">
+        <div className="flex gap-2 overflow-x-auto overscroll-x-contain -mx-4 px-4 pb-1 scrollbar-none">
+          {STAGES.map(stage => {
+            const count = grouped[stage.id]?.length ?? 0;
+            const active = mobileStage === stage.id;
+            return (
+              <button
+                key={stage.id}
+                onClick={() => setMobileStage(stage.id)}
+                className={`shrink-0 rounded-full px-3.5 py-2 text-sm font-medium min-h-[40px] transition-colors ${
+                  active
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-muted-foreground"
+                }`}
+              >
+                {stage.label}
+                <span className={`ml-1.5 text-xs ${active ? "text-primary-foreground/80" : ""}`}>{count}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="space-y-2">
+          {(grouped[mobileStage] ?? []).map(lead => (
+            // div, not button — card content contains a tel: link
+            <div
+              key={lead.id}
+              role="button"
+              tabIndex={0}
+              onClick={() => setSelected(lead)}
+              onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelected(lead); } }}
+              className="w-full text-left bg-background border rounded-xl p-3 space-y-2 shadow-sm active:bg-muted/50 transition-colors cursor-pointer"
+            >
+              <LeadCardContent lead={lead} today={today} />
+            </div>
+          ))}
+          {(grouped[mobileStage] ?? []).length === 0 && (
+            <div className="h-24 flex items-center justify-center text-sm text-muted-foreground border border-dashed rounded-xl">
+              No leads in {STAGES.find(s => s.id === mobileStage)?.label}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Kanban board (md+) */}
       <DndContext
         sensors={sensors}
         onDragStart={(e: DragStartEvent) => setActiveId(String(e.active.id))}
         onDragEnd={onDragEnd}
       >
-        <div className="flex w-full max-w-[calc(100vw-2rem)] md:max-w-full min-w-0 gap-4 overflow-x-auto overscroll-x-contain pb-4">
+        <div className="hidden md:flex w-full max-w-full min-w-0 gap-4 overflow-x-auto overscroll-x-contain pb-4">
           {STAGES.map(stage => (
             <KanbanColumn
               key={stage.id}
@@ -390,7 +450,14 @@ export function AdmissionsClient({ leads: initial, classes, dueTodayCount }: Pro
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-muted-foreground w-28 shrink-0">Stage</span>
-                <span className="font-medium">{STAGES.find(s => s.id === selected.stage)?.label}</span>
+                <select
+                  value={selected.stage}
+                  onChange={e => moveStage(selected, e.target.value)}
+                  className="flex-1 border rounded-lg px-3 py-2 text-sm font-medium bg-background min-h-[40px] focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  aria-label="Move to stage"
+                >
+                  {STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                </select>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-muted-foreground w-28 shrink-0">Priority</span>

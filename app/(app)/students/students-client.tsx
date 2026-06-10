@@ -4,7 +4,6 @@ import { useCallback, useRef, useState, useTransition } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Search, User, ChevronRight, Loader2 } from "lucide-react";
-import { motion } from "framer-motion";
 import type { Terminology } from "@/lib/i18n/terminology";
 import { useCachedQuery } from "@/lib/offline/use-cached-query";
 import { Input, Select } from "@/components/ui/input";
@@ -164,15 +163,10 @@ export function StudentsClient({
       )}
 
       <div className="space-y-2">
-        {allStudents.map((s, idx) => {
+        {allStudents.map((s) => {
           const primary = s.guardians[0]?.guardian;
           return (
-            <motion.div
-              key={s.id}
-              initial={{ opacity: 0, y: 4 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.15, delay: Math.min(idx * 0.008, 0.15) }}
-            >
+            <div key={s.id} className="animate-fade-in">
               <Link
                 href={`/students/${s.id}`}
                 className="flex items-center gap-3 border rounded-xl p-3.5 bg-card hover:bg-muted/50 transition-colors active:scale-[0.99]"
@@ -201,7 +195,7 @@ export function StudentsClient({
                 </div>
                 <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
               </Link>
-            </motion.div>
+            </div>
           );
         })}
       </div>
