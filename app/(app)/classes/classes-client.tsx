@@ -9,8 +9,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
 import {
-  BookOpen, ChevronDown, ChevronRight, GraduationCap, Pencil, Plus, ShieldCheck,
-  Trash2, Users, UserPlus, Crown, Layers,
+  ArrowLeft, ChevronDown, ChevronRight, GraduationCap, Pencil, Plus,
+  ShieldCheck, Trash2, UserPlus, Crown, Layers, Users,
 } from "lucide-react";
 import type { InstitutionType } from "@prisma/client";
 import { getTerminology } from "@/lib/i18n/terminology";
@@ -21,6 +21,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { AddTeacherSheet } from "@/components/staff/add-teacher-sheet";
+import { TeacherSheet, type TeacherProfile } from "@/components/staff/teacher-sheet";
 import { sheetHandoff } from "@/lib/ui/sheet-handoff";
 
 const classSchema = z.object({
@@ -37,7 +38,11 @@ const sectionSchema = z.object({
 });
 type SectionForm = z.infer<typeof sectionSchema>;
 
-interface StaffOption { id: string; fullName: string; role: string }
+interface StaffOption {
+  id: string; fullName: string; role: string;
+  phone: string | null; email: string | null;
+  designation: string | null; qualification: string | null;
+}
 interface StudentOption { id: string; fullName: string; gender: string | null; classId: string | null }
 interface Person { id: string; fullName: string; classId?: string | null }
 
@@ -88,6 +93,7 @@ interface Props {
   academicYears: AcademicYearOption[];
   activeAcademicYearId: string | null;
   defaultYearName: string;
+  canManage: boolean;
 }
 
 interface ClassGroupView {
@@ -102,9 +108,16 @@ function personName(id: string | null | undefined, people: Array<{ id: string; f
   return people.find((p) => p.id === id)?.fullName ?? null;
 }
 
+function staffProfile(id: string | null | undefined, staff: StaffOption[]): TeacherProfile | null {
+  if (!id) return null;
+  const s = staff.find(m => m.id === id);
+  if (!s) return null;
+  return { id: s.id, fullName: s.fullName, phone: s.phone, email: s.email, designation: s.designation, qualification: s.qualification };
+}
+
 export function ClassesClient({
   classes, emptyGroups, staff: initialStaff, students, institutionType,
-  academicYears: initialYears, activeAcademicYearId, defaultYearName,
+  academicYears: initialYears, activeAcademicYearId, defaultYearName, canManage,
 }: Props) {
   const t = getTerminology(institutionType);
   const router = useRouter();
@@ -115,14 +128,14 @@ export function ClassesClient({
   const [yearForm, setYearForm] = useState({ name: defaultYearName });
   const defaultYearForClasses = activeAcademicYearId ?? academicYears[0]?.id ?? "";
 
+  const [activeKey, setActiveKey]                 = useState<string | null>(null);
   const [classSheetOpen, setClassSheetOpen]       = useState(false);
-  const [editingClass, setEditingClass]           = useState<ClassGroupView | null>(null);
   const [sectionSheetGroup, setSectionSheetGroup] = useState<ClassGroupView | null>(null);
   const [editingSection, setEditingSection]       = useState<ClassRow | null>(null);
   const [leadershipGroup, setLeadershipGroup]     = useState<ClassGroupView | null>(null);
-  const [leadershipSection, setLeadershipSection] = useState<ClassRow | null>(null);
   const [deletingSection, setDeletingSection]     = useState<ClassRow | null>(null);
   const [addTeacherOpen, setAddTeacherOpen]       = useState(false);
+  const [headSheetOpen, setHeadSheetOpen]         = useState(false);
 
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [localValues, setLocalValues] = useState<Record<string, string>>({});
@@ -176,12 +189,30 @@ export function ClassesClient({
     );
   }, [classes, emptyGroups]);
 
+  const activeGroup = useMemo(
+    () => (activeKey ? grouped.find(g => g.key === activeKey) ?? null : null),
+    [activeKey, grouped],
+  );
+
+  // Everything a teacher handles across the institution (multi-class heads, shared teachers)
+  function teacherAssignments(teacherId: string): string[] {
+    const out: string[] = [];
+    for (const g of grouped) {
+      if (g.classHeadId === teacherId) out.push(`Class Head · ${g.name}`);
+      for (const s of g.sections) {
+        if (s.sectionTeacherId === teacherId) {
+          out.push(`Class Teacher · ${g.name}${s.section ? ` — Section ${s.section}` : ""}`);
+        }
+      }
+    }
+    return out;
+  }
+
   function fieldValue(key: string, value: string | null | undefined) {
     return localValues[key] ?? value ?? "";
   }
 
   function openAddClass() {
-    setEditingClass(null);
     classForm.reset({ name: "", academicYearId: defaultYearForClasses, medium: "", classHeadId: "" });
     setClassSheetOpen(true);
   }
@@ -287,19 +318,6 @@ export function ClassesClient({
     router.refresh();
   }
 
-  async function updateSection(sectionId: string, field: "sectionTeacherId" | "sectionLeaderId" | "girlsLeaderId" | "boysLeaderId", value: string | null, prev: string) {
-    const key = `section:${sectionId}:${field}`;
-    setSavingKey(key);
-    setLocalValues(s => ({ ...s, [key]: value ?? "" }));
-    const res = await fetch(`/api/classes/${sectionId}`, {
-      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ [field]: value }),
-    });
-    const result = await res.json();
-    setSavingKey(null);
-    if (!result.ok) { setLocalValues(s => ({ ...s, [key]: prev })); toast.error(result.error); return; }
-    router.refresh();
-  }
-
   function studentsForGroup(group: ClassGroupView) {
     const sectionIds = new Set(group.sections.map(s => s.id));
     return students.filter(s => s.classId && sectionIds.has(s.classId));
@@ -311,7 +329,7 @@ export function ClassesClient({
   }
 
   function onTeacherCreated(s: { id: string; fullName: string; role: string }) {
-    setStaff(prev => [...prev, s]);
+    setStaff(prev => [...prev, { ...s, phone: null, email: null, designation: null, qualification: null }]);
     setAddTeacherOpen(false);
     router.refresh();
   }
@@ -345,15 +363,166 @@ export function ClassesClient({
     }
   }
 
+  /* ════════ LEVEL 2 — one class: head + sections ════════ */
+  if (activeGroup) {
+    const group = activeGroup;
+    const totalStudents = group.sections.reduce((sum, s) => sum + s._count.students, 0);
+    const headProfile = staffProfile(group.classHeadId, staff);
+    const headStaff = staff.find(m => m.id === group.classHeadId);
+
+    return (
+      <div className="p-4 md:p-6 space-y-4 max-w-2xl">
+        <div>
+          <button
+            onClick={() => setActiveKey(null)}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors -ml-1 p-1"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" /> All {t.classes.toLowerCase()}
+          </button>
+          <div className="flex items-start justify-between gap-3 mt-1.5">
+            <div className="min-w-0">
+              <h1 className="text-xl md:text-2xl font-bold tracking-tight truncate">{group.name}</h1>
+              <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1.5 flex-wrap">
+                <Badge variant="outline">{group.academicYear}</Badge>
+                {group.medium && <Badge variant="secondary">{group.medium}</Badge>}
+                <span>{group.sections.length} section{group.sections.length === 1 ? "" : "s"}</span>
+                <span>·</span>
+                <span>{totalStudents} student{totalStudents === 1 ? "" : "s"}</span>
+              </p>
+            </div>
+            {canManage && (
+              <Button size="sm" variant="outline" onClick={() => setLeadershipGroup(group)}>
+                <Crown /> Leadership
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {/* Class Head card */}
+        <button
+          onClick={() => setHeadSheetOpen(true)}
+          className="w-full flex items-center gap-3 rounded-2xl border border-border bg-card p-3 text-left transition-all hover:shadow-md active:scale-[0.99]"
+        >
+          <div className={`h-10 w-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${headProfile ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
+            {headProfile
+              ? headProfile.fullName.split(" ").filter(Boolean).slice(0, 2).map(w => w[0]).join("").toUpperCase()
+              : <ShieldCheck className="h-4.5 w-4.5" />}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Class Head</p>
+            {headProfile ? (
+              <p className="text-sm font-semibold truncate mt-0.5">
+                {headProfile.fullName}
+                {headProfile.designation && <span className="text-muted-foreground font-normal"> · {headProfile.designation}</span>}
+              </p>
+            ) : (
+              <p className="text-sm font-medium text-muted-foreground mt-0.5">
+                {canManage && group.id ? "Not assigned — tap to assign" : "Not assigned"}
+              </p>
+            )}
+          </div>
+          <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+        </button>
+
+        {/* Sections */}
+        <div className="space-y-2">
+          <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Sections</p>
+          {group.sections.length === 0 ? (
+            <Card className="p-5 text-center">
+              <p className="text-sm font-medium">No sections yet</p>
+              <p className="text-xs text-muted-foreground mt-1 mb-3">Add a section like A, B, C, or Morning/Evening.</p>
+              {canManage && (
+                <Button size="sm" onClick={() => openAddSection(group)}>
+                  <Plus /> Add first section
+                </Button>
+              )}
+            </Card>
+          ) : (
+            <Card className="overflow-hidden">
+              <div className="divide-y divide-border">
+                {group.sections.map((section) => {
+                  const sectionTeacher = personName(section.sectionTeacherId, staff);
+                  return (
+                    <div key={section.id} className="p-3.5 md:p-4 flex items-center gap-2">
+                      <Link
+                        href={`/classes/${section.id}`}
+                        className="flex items-center gap-3 flex-1 min-w-0 -m-2 p-2 rounded-xl active:bg-muted transition-colors"
+                      >
+                        <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                          <span className="text-sm font-bold text-primary">{section.section ?? "—"}</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="font-semibold text-sm">Section {section.section ?? "—"}</p>
+                            <Badge variant="secondary">{section._count.students}</Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                            {sectionTeacher ? `Class Teacher: ${sectionTeacher}` : "No Class Teacher assigned"}
+                          </p>
+                        </div>
+                        <ChevronRight className="h-4 w-4 text-muted-foreground/50 shrink-0" />
+                      </Link>
+                      {canManage && (
+                        <div className="flex items-center shrink-0">
+                          <Button size="iconSm" variant="ghost" onClick={() => openEditSection(section)} aria-label="Edit">
+                            <Pencil />
+                          </Button>
+                          <Button size="iconSm" variant="ghost" onClick={() => setDeletingSection(section)} aria-label="Delete" className="text-destructive hover:bg-destructive/10">
+                            <Trash2 />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              {canManage && (
+                <button
+                  onClick={() => openAddSection(group)}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3.5 text-sm font-semibold text-primary border-t border-dashed border-border hover:bg-primary/5 transition-colors active:scale-[0.99]"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add section
+                </button>
+              )}
+            </Card>
+          )}
+        </div>
+
+        <TeacherSheet
+          open={headSheetOpen}
+          onOpenChange={setHeadSheetOpen}
+          contextLabel={`Class Head · ${group.name} (${group.academicYear})`}
+          teacher={headProfile}
+          teacherRole={headStaff?.role}
+          assignments={headProfile ? teacherAssignments(headProfile.id) : []}
+          staff={staff}
+          canManage={canManage && !!group.id}
+          changeLabel="Change Class Head"
+          onAssign={async (id) => {
+            if (!group.id) { toast.error("This class can't take a head — recreate it from Add class."); return false; }
+            const prev = group.classHeadId ?? "";
+            await updateGroup(group.id, "classHeadId", id, prev);
+            return true;
+          }}
+          onAddTeacher={() => sheetHandoff(() => setHeadSheetOpen(false), () => setAddTeacherOpen(true))}
+        />
+
+        {renderSharedSheets()}
+      </div>
+    );
+  }
+
+  /* ════════ LEVEL 1 — class cards only ════════ */
   return (
-    <div className="p-4 md:p-6 space-y-5 max-w-5xl">
-      {/* Header */}
+    <div className="p-4 md:p-6 space-y-5 max-w-3xl">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">{t.classes}</h1>
           <p className="text-sm text-muted-foreground mt-0.5 flex items-center gap-2 flex-wrap">
             {(() => {
               const activeYear = academicYears.find(y => y.id === activeAcademicYearId);
+              if (!canManage) return <span>{grouped.length === 0 ? "No classes assigned to you yet" : `${grouped.length} ${grouped.length === 1 ? "class" : "classes"} you handle`}</span>;
               return activeYear ? (
                 <a href="/settings/academic-year" className="inline-flex items-center gap-1 text-xs font-semibold rounded-full bg-primary/10 text-primary px-2 py-0.5 hover:bg-primary/15">
                   {activeYear.name} · Current
@@ -364,24 +533,29 @@ export function ClassesClient({
                 </a>
               );
             })()}
-            <span>·</span>
-            <span>{grouped.length === 0 ? "No classes yet" : `${grouped.length} class${grouped.length === 1 ? "" : "es"} · ${classes.length} section${classes.length === 1 ? "" : "s"}`}</span>
+            {canManage && (
+              <>
+                <span>·</span>
+                <span>{grouped.length === 0 ? "No classes yet" : `${grouped.length} class${grouped.length === 1 ? "" : "es"} · ${classes.length} section${classes.length === 1 ? "" : "s"}`}</span>
+              </>
+            )}
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="md" onClick={() => setAddTeacherOpen(true)}>
-            <UserPlus />
-            <span className="hidden sm:inline">Add teacher</span>
-          </Button>
-          <Button size="md" onClick={openAddClass}>
-            <Plus />
-            Add class
-          </Button>
-        </div>
+        {canManage && (
+          <div className="flex gap-2">
+            <Button variant="outline" size="md" onClick={() => setAddTeacherOpen(true)}>
+              <UserPlus />
+              <span className="hidden sm:inline">Add teacher</span>
+            </Button>
+            <Button size="md" onClick={openAddClass}>
+              <Plus />
+              Add class
+            </Button>
+          </div>
+        )}
       </div>
 
-      {/* Help banner when staff missing */}
-      {staff.length === 0 && grouped.length === 0 && (
+      {canManage && staff.length === 0 && grouped.length === 0 && (
         <Card className="p-4 border-amber-200 dark:border-amber-500/30 bg-amber-50/50 dark:bg-amber-500/10">
           <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">Start by adding a teacher</p>
           <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
@@ -393,423 +567,302 @@ export function ClassesClient({
         </Card>
       )}
 
-      {/* Empty */}
-      {grouped.length === 0 && staff.length > 0 && (
+      {grouped.length === 0 && (canManage ? staff.length > 0 : true) && (
         <EmptyState
           icon={GraduationCap}
-          title={`No ${t.classes.toLowerCase()} yet`}
-          description={`Create your first ${t.class.toLowerCase()} — you can add sections to it after.`}
-          action={<Button onClick={openAddClass}><Plus /> Add class</Button>}
+          title={canManage ? `No ${t.classes.toLowerCase()} yet` : "No classes assigned to you"}
+          description={canManage
+            ? `Create your first ${t.class.toLowerCase()} — you can add sections to it after.`
+            : "Your school admin will assign you as a Class Teacher or Class Head."}
+          action={canManage ? <Button onClick={openAddClass}><Plus /> Add class</Button> : undefined}
         />
       )}
 
-      {/* Classes list */}
-      <div className="space-y-4">
+      {/* Class cards */}
+      <div className="grid sm:grid-cols-2 gap-3">
         {grouped.map((group) => {
-          const groupStudents = studentsForGroup(group);
           const totalStudents = group.sections.reduce((sum, s) => sum + s._count.students, 0);
           const headName = personName(group.classHeadId, staff);
-
           return (
-            <Card key={group.key} className="overflow-hidden">
-              {/* Class header row */}
-              <div className="p-4 md:p-5 border-b border-border bg-[var(--surface-1)]">
-                <div className="flex items-start gap-3">
-                  <div className="h-11 w-11 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                    <GraduationCap className="h-5 w-5" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="font-bold text-base tracking-tight">{group.name}</h2>
-                      <Badge variant="outline">{group.academicYear}</Badge>
-                      {group.medium && <Badge variant="secondary">{group.medium}</Badge>}
-                    </div>
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1.5 flex-wrap">
-                      <span>{group.sections.length} section{group.sections.length === 1 ? "" : "s"}</span>
-                      <span>·</span>
-                      <span>{totalStudents} student{totalStudents === 1 ? "" : "s"}</span>
-                      {headName && (
-                        <>
-                          <span>·</span>
-                          <span className="flex items-center gap-1"><ShieldCheck className="h-3 w-3" /> Class Head: {headName}</span>
-                        </>
-                      )}
-                    </div>
-                  </div>
+            <button
+              key={group.key}
+              onClick={() => setActiveKey(group.key)}
+              className="text-left rounded-2xl border border-border bg-card p-4 transition-all hover:shadow-md hover:-translate-y-0.5 hover:border-primary/30 active:scale-[0.98]"
+            >
+              <div className="flex items-center gap-3">
+                <div className="h-11 w-11 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                  <GraduationCap className="h-5 w-5" />
                 </div>
-
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <Button size="sm" variant="ghost" onClick={() => setLeadershipGroup(group)}>
-                    <Crown /> Class leadership
-                  </Button>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h2 className="font-bold text-[15px] tracking-tight truncate">{group.name}</h2>
+                    <Badge variant="outline" className="shrink-0">{group.academicYear}</Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1 flex items-center gap-2 flex-wrap">
+                    <span className="inline-flex items-center gap-1"><Layers className="h-3 w-3" /> {group.sections.length} section{group.sections.length === 1 ? "" : "s"}</span>
+                    <span className="inline-flex items-center gap-1"><Users className="h-3 w-3" /> {totalStudents}</span>
+                  </p>
                 </div>
+                <ChevronRight className="h-4 w-4 text-muted-foreground/50 shrink-0" />
               </div>
-
-              {/* Sections list */}
-              {group.sections.length === 0 ? (
-                <div className="p-5 text-center">
-                  <p className="text-sm font-medium">No sections yet</p>
-                  <p className="text-xs text-muted-foreground mt-1 mb-3">Add a section like A, B, C, or Morning/Evening.</p>
-                  <Button size="sm" onClick={() => openAddSection(group)}>
-                    <Plus /> Add first section
-                  </Button>
-                </div>
-              ) : (
-                <>
-                  <div className="divide-y divide-border">
-                    {group.sections.map((section) => {
-                      const sectionTeacher = personName(section.sectionTeacherId, staff);
-                      return (
-                        <div key={section.id} className="p-4 md:p-5 flex items-center gap-3">
-                          <Link
-                            href={`/classes/${section.id}`}
-                            className="flex items-center gap-3 flex-1 min-w-0 -m-2 p-2 rounded-xl active:bg-muted transition-colors"
-                          >
-                            <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                              <Layers className="h-4 w-4 text-primary" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <p className="font-semibold text-sm">
-                                  Section {section.section ?? "—"}
-                                </p>
-                                <Badge variant="secondary">{section._count.students} students</Badge>
-                              </div>
-                              <p className="text-xs text-muted-foreground mt-0.5">
-                                {sectionTeacher ? `Class Teacher: ${sectionTeacher}` : "No Class Teacher assigned"}
-                              </p>
-                            </div>
-                            <ChevronRight className="h-4 w-4 text-muted-foreground/50 shrink-0" />
-                          </Link>
-                          <div className="flex items-center gap-1 shrink-0">
-                            <Button size="iconSm" variant="ghost" onClick={() => setLeadershipSection(section)} aria-label="Leadership">
-                              <Crown />
-                            </Button>
-                            <Button size="iconSm" variant="ghost" onClick={() => openEditSection(section)} aria-label="Edit">
-                              <Pencil />
-                            </Button>
-                            <Button size="iconSm" variant="ghost" onClick={() => setDeletingSection(section)} aria-label="Delete" className="text-destructive hover:bg-destructive/10">
-                              <Trash2 />
-                            </Button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  {/* Add another section row — always visible at the bottom of a populated list */}
-                  <button
-                    onClick={() => openAddSection(group)}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-3.5 text-sm font-semibold text-primary border-t border-dashed border-border hover:bg-primary/5 transition-colors active:scale-[0.99]"
-                  >
-                    <Plus className="h-4 w-4" />
-                    Add another section to {group.name}
-                  </button>
-                </>
-              )}
-            </Card>
+              <p className="text-xs text-muted-foreground mt-2.5 pt-2.5 border-t border-border flex items-center gap-1.5 truncate">
+                <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-primary/70" />
+                {headName ? <>Head: <span className="font-medium text-foreground">{headName}</span></> : "No Class Head assigned"}
+              </p>
+            </button>
           );
         })}
       </div>
 
-      {/* ───────── ADD CLASS SHEET ───────── */}
-      <Sheet open={classSheetOpen} onOpenChange={setClassSheetOpen}>
-        <SheetContent side="bottom" className="max-h-[92dvh]">
-          <SheetHeader>
-            <SheetTitle>New class</SheetTitle>
-            <p className="text-xs text-muted-foreground mt-0.5">Just the class — you&apos;ll add sections after.</p>
-          </SheetHeader>
-          <form onSubmit={classForm.handleSubmit(onClassSubmit)} className="flex flex-col flex-1 min-h-0">
-            <SheetBody className="space-y-5">
-              <FieldRow label={`${t.class} name *`} error={classForm.formState.errors.name?.message}>
-                <Input autoFocus placeholder="Class 6" {...classForm.register("name")} />
-              </FieldRow>
-              <div className="space-y-1.5">
-                <Label>Academic year *</Label>
-                {academicYears.length === 0 ? (
-                  <div className="rounded-xl border border-dashed border-border p-3 text-xs text-muted-foreground flex items-center justify-between gap-2">
-                    <span>No academic year set up yet</span>
-                    <Button type="button" size="sm" variant="outline" onClick={() => setCreateYearOpen(true)}>
-                      <Plus /> Add {defaultYearName}
-                    </Button>
-                  </div>
-                ) : (
-                  <>
-                    <Select {...classForm.register("academicYearId")}>
-                      {academicYears.map(y => (
-                        <option key={y.id} value={y.id}>{y.name}{y.isActive ? " · Current" : ""}</option>
-                      ))}
-                    </Select>
-                    <button type="button" onClick={() => setCreateYearOpen(true)} className="text-xs text-primary font-medium hover:underline">
-                      + Create a new academic year
-                    </button>
-                  </>
-                )}
-                {classForm.formState.errors.academicYearId && (
-                  <p className="text-destructive text-xs">{classForm.formState.errors.academicYearId.message}</p>
-                )}
-              </div>
-              <FieldRow label="Medium">
-                <Input placeholder="English" {...classForm.register("medium")} />
-              </FieldRow>
-
-              <div className="space-y-1.5">
-                <Label>Class Head (optional)</Label>
-                {staff.length === 0 ? (
-                  <div className="rounded-xl border border-dashed border-border p-3 text-xs text-muted-foreground flex items-center justify-between gap-2">
-                    <span>No teachers yet</span>
-                    <Button type="button" size="sm" variant="outline" onClick={() => sheetHandoff(() => setClassSheetOpen(false), () => setAddTeacherOpen(true))}>
-                      <UserPlus /> Add teacher
-                    </Button>
-                  </div>
-                ) : (
-                  <>
-                    <Select {...classForm.register("classHeadId")}>
-                      <option value="">Not assigned</option>
-                      {staff.map(m => (
-                        <option key={m.id} value={m.id}>{m.fullName} · {m.role.toLowerCase()}</option>
-                      ))}
-                    </Select>
-                    <button type="button" onClick={() => sheetHandoff(() => setClassSheetOpen(false), () => setAddTeacherOpen(true))} className="text-xs text-primary font-medium hover:underline">
-                      + Add a new teacher
-                    </button>
-                  </>
-                )}
-              </div>
-            </SheetBody>
-            <SheetFooter className="grid grid-cols-2 gap-2">
-              <Button type="button" variant="outline" onClick={() => setClassSheetOpen(false)} disabled={classSubmitting}>Cancel</Button>
-              <Button type="submit" disabled={classSubmitting}>{classSubmitting ? "Creating…" : "Create class"}</Button>
-            </SheetFooter>
-          </form>
-        </SheetContent>
-      </Sheet>
-
-      {/* ───────── ADD / EDIT SECTION SHEET ───────── */}
-      <Sheet open={!!sectionSheetGroup} onOpenChange={(v) => { if (!v) { setSectionSheetGroup(null); setEditingSection(null); } }}>
-        <SheetContent side="bottom" className="max-h-[92dvh]">
-          <SheetHeader>
-            <SheetTitle>
-              {editingSection ? "Edit section" : `Add section to ${sectionSheetGroup?.name ?? ""}`}
-            </SheetTitle>
-            {!editingSection && sectionSheetGroup && (
-              <p className="text-xs text-muted-foreground mt-0.5">Academic year {sectionSheetGroup.academicYear}</p>
-            )}
-          </SheetHeader>
-          <form onSubmit={sectionForm.handleSubmit(onSectionSubmit)} className="flex flex-col flex-1 min-h-0">
-            <SheetBody className="space-y-5">
-              <FieldRow label="Section name *" error={sectionForm.formState.errors.section?.message} hint="Single letter or short label (e.g. A, B, Morning)">
-                <Input autoFocus placeholder="A" {...sectionForm.register("section")} />
-              </FieldRow>
-
-              <div className="space-y-1.5">
-                <Label>Section Class Teacher</Label>
-                {staff.length === 0 ? (
-                  <div className="rounded-xl border border-dashed border-border p-3 text-xs text-muted-foreground flex items-center justify-between gap-2">
-                    <span>No teachers yet</span>
-                    <Button type="button" size="sm" variant="outline" onClick={() => sheetHandoff(() => setSectionSheetGroup(null), () => setAddTeacherOpen(true))}>
-                      <UserPlus /> Add teacher
-                    </Button>
-                  </div>
-                ) : (
-                  <>
-                    <Select {...sectionForm.register("sectionTeacherId")}>
-                      <option value="">Not assigned</option>
-                      {staff.map(m => (
-                        <option key={m.id} value={m.id}>{m.fullName} · {m.role.toLowerCase()}</option>
-                      ))}
-                    </Select>
-                    <button type="button" onClick={() => sheetHandoff(() => setSectionSheetGroup(null), () => setAddTeacherOpen(true))} className="text-xs text-primary font-medium hover:underline">
-                      + Add a new teacher
-                    </button>
-                  </>
-                )}
-              </div>
-            </SheetBody>
-            <SheetFooter className="grid grid-cols-2 gap-2">
-              <Button type="button" variant="outline" onClick={() => { setSectionSheetGroup(null); setEditingSection(null); }} disabled={sectionSubmitting}>Cancel</Button>
-              <Button type="submit" disabled={sectionSubmitting}>
-                {sectionSubmitting ? "Saving…" : editingSection ? "Save changes" : "Add section"}
-              </Button>
-            </SheetFooter>
-          </form>
-        </SheetContent>
-      </Sheet>
-
-      {/* ───────── LEADERSHIP SHEET (group level) ───────── */}
-      <Sheet open={!!leadershipGroup} onOpenChange={(v) => { if (!v) setLeadershipGroup(null); }}>
-        <SheetContent side="bottom" className="max-h-[88dvh]">
-          <SheetHeader>
-            <SheetTitle>{leadershipGroup?.name} · Leadership</SheetTitle>
-            <p className="text-xs text-muted-foreground mt-0.5">Applies to all sections of this class.</p>
-          </SheetHeader>
-          <SheetBody className="space-y-4">
-            {leadershipGroup && (() => {
-              const groupStudents = studentsForGroup(leadershipGroup);
-              const classHeadVal       = fieldValue(`group:${leadershipGroup.id}:classHeadId`, leadershipGroup.classHeadId);
-              const classLeaderVal     = fieldValue(`group:${leadershipGroup.id}:classLeaderId`, leadershipGroup.classLeaderId);
-              const girlsLeaderVal     = fieldValue(`group:${leadershipGroup.id}:girlsLeaderId`, leadershipGroup.girlsLeaderId);
-              const boysLeaderVal      = fieldValue(`group:${leadershipGroup.id}:boysLeaderId`, leadershipGroup.boysLeaderId);
-              return (
-                <>
-                  <LeadershipField
-                    label="Class Head"
-                    description="A teacher who owns this entire class"
-                    icon={ShieldCheck}
-                    value={classHeadVal}
-                    saving={savingKey === `group:${leadershipGroup.id}:classHeadId`}
-                    onChange={(v) => updateGroup(leadershipGroup.id, "classHeadId", v || null, classHeadVal)}
-                    options={staff.map(m => ({ id: m.id, label: `${m.fullName} · ${m.role.toLowerCase()}` }))}
-                    emptyAction={
-                      <button type="button" onClick={() => sheetHandoff(() => setLeadershipGroup(null), () => setAddTeacherOpen(true))} className="text-xs text-primary font-medium hover:underline">
-                        + Add a new teacher
-                      </button>
-                    }
-                  />
-                  <LeadershipField label="Class Leader" icon={Crown} description="One student to lead the entire class"
-                    value={classLeaderVal}
-                    saving={savingKey === `group:${leadershipGroup.id}:classLeaderId`}
-                    onChange={(v) => updateGroup(leadershipGroup.id, "classLeaderId", v || null, classLeaderVal)}
-                    options={groupStudents.map(s => ({ id: s.id, label: s.fullName }))}
-                    disabledHint={groupStudents.length === 0 ? "Add students before assigning a leader." : undefined}
-                  />
-                  <LeadershipField label="Girls Leader" icon={Crown} description="Female student representative"
-                    value={girlsLeaderVal}
-                    saving={savingKey === `group:${leadershipGroup.id}:girlsLeaderId`}
-                    onChange={(v) => updateGroup(leadershipGroup.id, "girlsLeaderId", v || null, girlsLeaderVal)}
-                    options={leaderOptions(groupStudents, "FEMALE").map(s => ({ id: s.id, label: s.fullName }))}
-                    disabledHint={groupStudents.length === 0 ? "Add students first." : undefined}
-                  />
-                  <LeadershipField label="Boys Leader" icon={Crown} description="Male student representative"
-                    value={boysLeaderVal}
-                    saving={savingKey === `group:${leadershipGroup.id}:boysLeaderId`}
-                    onChange={(v) => updateGroup(leadershipGroup.id, "boysLeaderId", v || null, boysLeaderVal)}
-                    options={leaderOptions(groupStudents, "MALE").map(s => ({ id: s.id, label: s.fullName }))}
-                    disabledHint={groupStudents.length === 0 ? "Add students first." : undefined}
-                  />
-                </>
-              );
-            })()}
-          </SheetBody>
-          <SheetFooter>
-            <Button onClick={() => setLeadershipGroup(null)} className="w-full">Done</Button>
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
-
-      {/* ───────── LEADERSHIP SHEET (section level) ───────── */}
-      <Sheet open={!!leadershipSection} onOpenChange={(v) => { if (!v) setLeadershipSection(null); }}>
-        <SheetContent side="bottom" className="max-h-[88dvh]">
-          <SheetHeader>
-            <SheetTitle>{leadershipSection ? `Section ${leadershipSection.section ?? "—"} · Leadership` : ""}</SheetTitle>
-          </SheetHeader>
-          <SheetBody className="space-y-4">
-            {leadershipSection && (() => {
-              const teacherVal = fieldValue(`section:${leadershipSection.id}:sectionTeacherId`, leadershipSection.sectionTeacherId);
-              const sectionLeaderVal = fieldValue(`section:${leadershipSection.id}:sectionLeaderId`, leadershipSection.sectionLeaderId);
-              const sectionGirlsVal  = fieldValue(`section:${leadershipSection.id}:girlsLeaderId`, leadershipSection.girlsLeaderId);
-              const sectionBoysVal   = fieldValue(`section:${leadershipSection.id}:boysLeaderId`, leadershipSection.boysLeaderId);
-              return (
-                <>
-                  <LeadershipField
-                    label="Section Class Teacher" icon={ShieldCheck}
-                    description="The teacher responsible for this section"
-                    value={teacherVal}
-                    saving={savingKey === `section:${leadershipSection.id}:sectionTeacherId`}
-                    onChange={(v) => updateSection(leadershipSection.id, "sectionTeacherId", v || null, teacherVal)}
-                    options={staff.map(m => ({ id: m.id, label: `${m.fullName} · ${m.role.toLowerCase()}` }))}
-                    emptyAction={
-                      <button type="button" onClick={() => sheetHandoff(() => setLeadershipSection(null), () => setAddTeacherOpen(true))} className="text-xs text-primary font-medium hover:underline">
-                        + Add a new teacher
-                      </button>
-                    }
-                  />
-                  <LeadershipField
-                    label="Section Leader" icon={Crown}
-                    value={sectionLeaderVal}
-                    saving={savingKey === `section:${leadershipSection.id}:sectionLeaderId`}
-                    onChange={(v) => updateSection(leadershipSection.id, "sectionLeaderId", v || null, sectionLeaderVal)}
-                    options={leadershipSection.students.map(s => ({ id: s.id, label: s.fullName }))}
-                    disabledHint={leadershipSection.students.length === 0 ? "Add students to this section first." : undefined}
-                  />
-                  <LeadershipField label="Girls Leader" icon={Crown}
-                    value={sectionGirlsVal}
-                    saving={savingKey === `section:${leadershipSection.id}:girlsLeaderId`}
-                    onChange={(v) => updateSection(leadershipSection.id, "girlsLeaderId", v || null, sectionGirlsVal)}
-                    options={leaderOptions(leadershipSection.students, "FEMALE").map(s => ({ id: s.id, label: s.fullName }))}
-                    disabledHint={leadershipSection.students.length === 0 ? "Add students first." : undefined}
-                  />
-                  <LeadershipField label="Boys Leader" icon={Crown}
-                    value={sectionBoysVal}
-                    saving={savingKey === `section:${leadershipSection.id}:boysLeaderId`}
-                    onChange={(v) => updateSection(leadershipSection.id, "boysLeaderId", v || null, sectionBoysVal)}
-                    options={leaderOptions(leadershipSection.students, "MALE").map(s => ({ id: s.id, label: s.fullName }))}
-                    disabledHint={leadershipSection.students.length === 0 ? "Add students first." : undefined}
-                  />
-                </>
-              );
-            })()}
-          </SheetBody>
-          <SheetFooter>
-            <Button onClick={() => setLeadershipSection(null)} className="w-full">Done</Button>
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
-
-      {/* ───────── DELETE SECTION SHEET ───────── */}
-      <Sheet open={!!deletingSection} onOpenChange={(v) => { if (!v) setDeletingSection(null); }}>
-        <SheetContent side="bottom">
-          <SheetHeader>
-            <SheetTitle>Delete section?</SheetTitle>
-          </SheetHeader>
-          <SheetBody>
-            <p className="text-sm">
-              <strong>Section {deletingSection?.section ?? "—"}</strong> of {deletingSection?.classGroup?.name} has{" "}
-              <strong>{deletingSection?._count.students ?? 0}</strong> active students. They will be unassigned.
-            </p>
-          </SheetBody>
-          <SheetFooter className="grid grid-cols-2 gap-2">
-            <Button variant="outline" onClick={() => setDeletingSection(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={confirmDelete}>Delete</Button>
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
-
-      {/* ───────── ADD TEACHER SHEET ───────── */}
-      <AddTeacherSheet open={addTeacherOpen} onOpenChange={setAddTeacherOpen} onCreated={onTeacherCreated} />
-
-      {/* ───────── INLINE CREATE ACADEMIC YEAR SHEET ───────── */}
-      <Sheet open={createYearOpen} onOpenChange={setCreateYearOpen}>
-        <SheetContent side="bottom">
-          <SheetHeader>
-            <SheetTitle>New academic year</SheetTitle>
-            <p className="text-xs text-muted-foreground mt-0.5">Format: YYYY-YY (e.g. 2026-27)</p>
-          </SheetHeader>
-          <SheetBody>
-            <div className="space-y-1.5">
-              <Label>Name *</Label>
-              <Input
-                autoFocus
-                value={yearForm.name}
-                onChange={(e) => setYearForm({ name: e.target.value })}
-                placeholder={defaultYearName}
-              />
-              <p className="text-xs text-muted-foreground">
-                {academicYears.length === 0
-                  ? "This will become the current academic year."
-                  : "Activate it later from Settings → Academic year."}
-              </p>
-            </div>
-          </SheetBody>
-          <SheetFooter className="grid grid-cols-2 gap-2">
-            <Button variant="outline" onClick={() => setCreateYearOpen(false)} disabled={creatingYear}>Cancel</Button>
-            <Button onClick={createYearInline} disabled={creatingYear}>
-              {creatingYear ? "Creating…" : "Create year"}
-            </Button>
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
+      {renderSharedSheets()}
     </div>
   );
+
+  /* ════════ Sheets shared by both levels ════════ */
+  function renderSharedSheets() {
+    return (
+      <>
+        {/* ADD CLASS */}
+        <Sheet open={classSheetOpen} onOpenChange={setClassSheetOpen}>
+          <SheetContent side="bottom" className="max-h-[92dvh]">
+            <SheetHeader>
+              <SheetTitle>New class</SheetTitle>
+              <p className="text-xs text-muted-foreground mt-0.5">Just the class — you&apos;ll add sections after.</p>
+            </SheetHeader>
+            <form onSubmit={classForm.handleSubmit(onClassSubmit)} className="flex flex-col flex-1 min-h-0">
+              <SheetBody className="space-y-5">
+                <FieldRow label={`${t.class} name *`} error={classForm.formState.errors.name?.message}>
+                  <Input autoFocus placeholder="Class 6" {...classForm.register("name")} />
+                </FieldRow>
+                <div className="space-y-1.5">
+                  <Label>Academic year *</Label>
+                  {academicYears.length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-border p-3 text-xs text-muted-foreground flex items-center justify-between gap-2">
+                      <span>No academic year set up yet</span>
+                      <Button type="button" size="sm" variant="outline" onClick={() => setCreateYearOpen(true)}>
+                        <Plus /> Add {defaultYearName}
+                      </Button>
+                    </div>
+                  ) : (
+                    <>
+                      <Select {...classForm.register("academicYearId")}>
+                        {academicYears.map(y => (
+                          <option key={y.id} value={y.id}>{y.name}{y.isActive ? " · Current" : ""}</option>
+                        ))}
+                      </Select>
+                      <button type="button" onClick={() => setCreateYearOpen(true)} className="text-xs text-primary font-medium hover:underline">
+                        + Create a new academic year
+                      </button>
+                    </>
+                  )}
+                  {classForm.formState.errors.academicYearId && (
+                    <p className="text-destructive text-xs">{classForm.formState.errors.academicYearId.message}</p>
+                  )}
+                </div>
+                <FieldRow label="Medium">
+                  <Input placeholder="English" {...classForm.register("medium")} />
+                </FieldRow>
+
+                <div className="space-y-1.5">
+                  <Label>Class Head (optional)</Label>
+                  {staff.length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-border p-3 text-xs text-muted-foreground flex items-center justify-between gap-2">
+                      <span>No teachers yet</span>
+                      <Button type="button" size="sm" variant="outline" onClick={() => sheetHandoff(() => setClassSheetOpen(false), () => setAddTeacherOpen(true))}>
+                        <UserPlus /> Add teacher
+                      </Button>
+                    </div>
+                  ) : (
+                    <>
+                      <Select {...classForm.register("classHeadId")}>
+                        <option value="">Not assigned</option>
+                        {staff.map(m => (
+                          <option key={m.id} value={m.id}>{m.fullName} · {m.role.toLowerCase()}</option>
+                        ))}
+                      </Select>
+                      <button type="button" onClick={() => sheetHandoff(() => setClassSheetOpen(false), () => setAddTeacherOpen(true))} className="text-xs text-primary font-medium hover:underline">
+                        + Add a new teacher
+                      </button>
+                    </>
+                  )}
+                </div>
+              </SheetBody>
+              <SheetFooter className="grid grid-cols-2 gap-2">
+                <Button type="button" variant="outline" onClick={() => setClassSheetOpen(false)} disabled={classSubmitting}>Cancel</Button>
+                <Button type="submit" disabled={classSubmitting}>{classSubmitting ? "Creating…" : "Create class"}</Button>
+              </SheetFooter>
+            </form>
+          </SheetContent>
+        </Sheet>
+
+        {/* ADD / EDIT SECTION */}
+        <Sheet open={!!sectionSheetGroup} onOpenChange={(v) => { if (!v) { setSectionSheetGroup(null); setEditingSection(null); } }}>
+          <SheetContent side="bottom" className="max-h-[92dvh]">
+            <SheetHeader>
+              <SheetTitle>
+                {editingSection ? "Edit section" : `Add section to ${sectionSheetGroup?.name ?? ""}`}
+              </SheetTitle>
+              {!editingSection && sectionSheetGroup && (
+                <p className="text-xs text-muted-foreground mt-0.5">Academic year {sectionSheetGroup.academicYear}</p>
+              )}
+            </SheetHeader>
+            <form onSubmit={sectionForm.handleSubmit(onSectionSubmit)} className="flex flex-col flex-1 min-h-0">
+              <SheetBody className="space-y-5">
+                <FieldRow label="Section name *" error={sectionForm.formState.errors.section?.message} hint="Single letter or short label (e.g. A, B, Morning)">
+                  <Input autoFocus placeholder="A" {...sectionForm.register("section")} />
+                </FieldRow>
+
+                <div className="space-y-1.5">
+                  <Label>Section Class Teacher</Label>
+                  {staff.length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-border p-3 text-xs text-muted-foreground flex items-center justify-between gap-2">
+                      <span>No teachers yet</span>
+                      <Button type="button" size="sm" variant="outline" onClick={() => sheetHandoff(() => setSectionSheetGroup(null), () => setAddTeacherOpen(true))}>
+                        <UserPlus /> Add teacher
+                      </Button>
+                    </div>
+                  ) : (
+                    <>
+                      <Select {...sectionForm.register("sectionTeacherId")}>
+                        <option value="">Not assigned</option>
+                        {staff.map(m => (
+                          <option key={m.id} value={m.id}>{m.fullName} · {m.role.toLowerCase()}</option>
+                        ))}
+                      </Select>
+                      <button type="button" onClick={() => sheetHandoff(() => setSectionSheetGroup(null), () => setAddTeacherOpen(true))} className="text-xs text-primary font-medium hover:underline">
+                        + Add a new teacher
+                      </button>
+                    </>
+                  )}
+                </div>
+              </SheetBody>
+              <SheetFooter className="grid grid-cols-2 gap-2">
+                <Button type="button" variant="outline" onClick={() => { setSectionSheetGroup(null); setEditingSection(null); }} disabled={sectionSubmitting}>Cancel</Button>
+                <Button type="submit" disabled={sectionSubmitting}>
+                  {sectionSubmitting ? "Saving…" : editingSection ? "Save changes" : "Add section"}
+                </Button>
+              </SheetFooter>
+            </form>
+          </SheetContent>
+        </Sheet>
+
+        {/* LEADERSHIP (class level) */}
+        <Sheet open={!!leadershipGroup} onOpenChange={(v) => { if (!v) setLeadershipGroup(null); }}>
+          <SheetContent side="bottom" className="max-h-[88dvh]">
+            <SheetHeader>
+              <SheetTitle>{leadershipGroup?.name} · Leadership</SheetTitle>
+              <p className="text-xs text-muted-foreground mt-0.5">Applies to all sections of this class.</p>
+            </SheetHeader>
+            <SheetBody className="space-y-4">
+              {leadershipGroup && (() => {
+                const groupStudents = studentsForGroup(leadershipGroup);
+                const classHeadVal   = fieldValue(`group:${leadershipGroup.id}:classHeadId`, leadershipGroup.classHeadId);
+                const classLeaderVal = fieldValue(`group:${leadershipGroup.id}:classLeaderId`, leadershipGroup.classLeaderId);
+                const girlsLeaderVal = fieldValue(`group:${leadershipGroup.id}:girlsLeaderId`, leadershipGroup.girlsLeaderId);
+                const boysLeaderVal  = fieldValue(`group:${leadershipGroup.id}:boysLeaderId`, leadershipGroup.boysLeaderId);
+                return (
+                  <>
+                    <LeadershipField
+                      label="Class Head"
+                      description="A teacher who owns this entire class"
+                      icon={ShieldCheck}
+                      value={classHeadVal}
+                      saving={savingKey === `group:${leadershipGroup.id}:classHeadId`}
+                      onChange={(v) => updateGroup(leadershipGroup.id, "classHeadId", v || null, classHeadVal)}
+                      options={staff.map(m => ({ id: m.id, label: `${m.fullName} · ${m.role.toLowerCase()}` }))}
+                      emptyAction={
+                        <button type="button" onClick={() => sheetHandoff(() => setLeadershipGroup(null), () => setAddTeacherOpen(true))} className="text-xs text-primary font-medium hover:underline">
+                          + Add a new teacher
+                        </button>
+                      }
+                    />
+                    <LeadershipField label="Class Leader" icon={Crown} description="One student to lead the entire class"
+                      value={classLeaderVal}
+                      saving={savingKey === `group:${leadershipGroup.id}:classLeaderId`}
+                      onChange={(v) => updateGroup(leadershipGroup.id, "classLeaderId", v || null, classLeaderVal)}
+                      options={groupStudents.map(s => ({ id: s.id, label: s.fullName }))}
+                      disabledHint={groupStudents.length === 0 ? "Add students before assigning a leader." : undefined}
+                    />
+                    <LeadershipField label="Girls Leader" icon={Crown} description="Female student representative"
+                      value={girlsLeaderVal}
+                      saving={savingKey === `group:${leadershipGroup.id}:girlsLeaderId`}
+                      onChange={(v) => updateGroup(leadershipGroup.id, "girlsLeaderId", v || null, girlsLeaderVal)}
+                      options={leaderOptions(groupStudents, "FEMALE").map(s => ({ id: s.id, label: s.fullName }))}
+                      disabledHint={groupStudents.length === 0 ? "Add students first." : undefined}
+                    />
+                    <LeadershipField label="Boys Leader" icon={Crown} description="Male student representative"
+                      value={boysLeaderVal}
+                      saving={savingKey === `group:${leadershipGroup.id}:boysLeaderId`}
+                      onChange={(v) => updateGroup(leadershipGroup.id, "boysLeaderId", v || null, boysLeaderVal)}
+                      options={leaderOptions(groupStudents, "MALE").map(s => ({ id: s.id, label: s.fullName }))}
+                      disabledHint={groupStudents.length === 0 ? "Add students first." : undefined}
+                    />
+                  </>
+                );
+              })()}
+            </SheetBody>
+            <SheetFooter>
+              <Button onClick={() => setLeadershipGroup(null)} className="w-full">Done</Button>
+            </SheetFooter>
+          </SheetContent>
+        </Sheet>
+
+        {/* DELETE SECTION */}
+        <Sheet open={!!deletingSection} onOpenChange={(v) => { if (!v) setDeletingSection(null); }}>
+          <SheetContent side="bottom">
+            <SheetHeader>
+              <SheetTitle>Delete section?</SheetTitle>
+            </SheetHeader>
+            <SheetBody>
+              <p className="text-sm">
+                <strong>Section {deletingSection?.section ?? "—"}</strong> of {deletingSection?.classGroup?.name ?? deletingSection?.name} has{" "}
+                <strong>{deletingSection?._count.students ?? 0}</strong> active students. They will be unassigned.
+              </p>
+            </SheetBody>
+            <SheetFooter className="grid grid-cols-2 gap-2">
+              <Button variant="outline" onClick={() => setDeletingSection(null)}>Cancel</Button>
+              <Button variant="destructive" onClick={confirmDelete}>Delete</Button>
+            </SheetFooter>
+          </SheetContent>
+        </Sheet>
+
+        {/* ADD TEACHER */}
+        <AddTeacherSheet open={addTeacherOpen} onOpenChange={setAddTeacherOpen} onCreated={onTeacherCreated} />
+
+        {/* CREATE ACADEMIC YEAR */}
+        <Sheet open={createYearOpen} onOpenChange={setCreateYearOpen}>
+          <SheetContent side="bottom">
+            <SheetHeader>
+              <SheetTitle>New academic year</SheetTitle>
+              <p className="text-xs text-muted-foreground mt-0.5">Format: YYYY-YY (e.g. 2026-27)</p>
+            </SheetHeader>
+            <SheetBody>
+              <div className="space-y-1.5">
+                <Label>Name *</Label>
+                <Input
+                  autoFocus
+                  value={yearForm.name}
+                  onChange={(e) => setYearForm({ name: e.target.value })}
+                  placeholder={defaultYearName}
+                />
+                <p className="text-xs text-muted-foreground">
+                  {academicYears.length === 0
+                    ? "This will become the current academic year."
+                    : "Activate it later from Settings → Academic year."}
+                </p>
+              </div>
+            </SheetBody>
+            <SheetFooter className="grid grid-cols-2 gap-2">
+              <Button variant="outline" onClick={() => setCreateYearOpen(false)} disabled={creatingYear}>Cancel</Button>
+              <Button onClick={createYearInline} disabled={creatingYear}>
+                {creatingYear ? "Creating…" : "Create year"}
+              </Button>
+            </SheetFooter>
+          </SheetContent>
+        </Sheet>
+      </>
+    );
+  }
 }
 
 function FieldRow({ label, children, error, hint }: { label: string; children: ReactNode; error?: string; hint?: string }) {

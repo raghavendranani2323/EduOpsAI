@@ -1,13 +1,22 @@
 import { requireInstitution } from "@/lib/tenant/current";
 import { withRls } from "@/lib/prisma/rls";
+import { getTeacherClassIds } from "@/lib/tenant/teacher-scope";
 import { ClassesClient } from "./classes-client";
 import { defaultAcademicYearName } from "@/lib/tenant/academic-year";
 
 export default async function ClassesPage() {
-  const { user, institution } = await requireInstitution();
+  const { user, institution, membership } = await requireInstitution();
+  const isTeacher = membership.role === "TEACHER";
+
   const { classes, staff, students, emptyGroups, academicYears, activeYear } = await withRls(user.id, async (tx) => {
+    // Teachers only see classes they handle (section teacher or class head)
+    const allowedIds = await getTeacherClassIds(tx, user.id, institution.id, membership.role);
+
     const classes = await tx.class.findMany({
-      where: { institutionId: institution.id },
+      where: {
+        institutionId: institution.id,
+        ...(allowedIds ? { id: { in: allowedIds.length ? allowedIds : ["__none__"] } } : {}),
+      },
       include: {
         classGroup: {
           include: {
@@ -34,7 +43,7 @@ export default async function ClassesPage() {
 
     // Class groups with NO sections (newly created via /api/class-groups)
     const usedGroupIds = new Set(classes.map(c => c.classGroupId).filter(Boolean) as string[]);
-    const emptyGroups = await tx.classGroup.findMany({
+    const emptyGroups = isTeacher ? [] : await tx.classGroup.findMany({
       where: {
         institutionId: institution.id,
         ...(usedGroupIds.size > 0 ? { id: { notIn: [...usedGroupIds] } } : {}),
@@ -51,7 +60,11 @@ export default async function ClassesPage() {
 
     const staff = await tx.membership.findMany({
       where: { institutionId: institution.id, revokedAt: null, role: { in: ["OWNER", "ADMIN", "TEACHER"] } },
-      include: { user: { select: { id: true, fullName: true } } },
+      include: {
+        user: {
+          select: { id: true, fullName: true, phone: true, email: true, designation: true, qualification: true },
+        },
+      },
       orderBy: { role: "asc" },
     });
     const students = await tx.student.findMany({
@@ -70,7 +83,15 @@ export default async function ClassesPage() {
     return {
       classes,
       emptyGroups,
-      staff: staff.map((member) => ({ id: member.user.id, fullName: member.user.fullName, role: member.role })),
+      staff: staff.map((m) => ({
+        id: m.user.id,
+        fullName: m.user.fullName,
+        role: m.role,
+        phone: m.user.phone,
+        email: m.user.email,
+        designation: m.user.designation,
+        qualification: m.user.qualification,
+      })),
       students,
       academicYears,
       activeYear,
@@ -87,6 +108,7 @@ export default async function ClassesPage() {
       academicYears={academicYears}
       activeAcademicYearId={activeYear?.id ?? null}
       defaultYearName={defaultAcademicYearName()}
+      canManage={!isTeacher}
     />
   );
 }
