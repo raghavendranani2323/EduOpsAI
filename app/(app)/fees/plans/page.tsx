@@ -1,9 +1,11 @@
+import { redirect } from "next/navigation";
 import { requireInstitution } from "@/lib/tenant/current";
 import { withRls } from "@/lib/prisma/rls";
 import { PlansClient } from "./plans-client";
 
 export default async function FeePlansPage() {
-  const { user, institution } = await requireInstitution();
+  const { user, institution, membership } = await requireInstitution();
+  if (membership.role === "TEACHER") redirect("/dashboard");
   const { plans, classes, academicYears } = await withRls(user.id, async (tx) => {
     const [p, c, y] = await Promise.all([
       tx.feePlan.findMany({

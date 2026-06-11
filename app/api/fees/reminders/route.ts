@@ -31,7 +31,8 @@ function composeBody(opts: {
 
 export async function POST(req: Request) {
   try {
-    const { user, institution } = await requireInstitution();
+    const { user, institution, membership } = await requireInstitution();
+    if (membership.role === "TEACHER") return NextResponse.json({ ok: false, error: "Not available for teacher accounts" }, { status: 403 });
     const parsed = remindSchema.safeParse(await req.json());
     if (!parsed.success) {
       return NextResponse.json({ ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });

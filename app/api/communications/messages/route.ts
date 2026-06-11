@@ -4,7 +4,8 @@ import { withRls } from "@/lib/prisma/rls";
 
 export async function GET(req: Request) {
   try {
-    const { user, institution } = await requireInstitution();
+    const { user, institution, membership } = await requireInstitution();
+    if (membership.role === "TEACHER") return NextResponse.json({ ok: false, error: "Not available for teacher accounts" }, { status: 403 });
     const { searchParams } = new URL(req.url);
     const cursor = searchParams.get("cursor") ?? "";
     const PAGE_SIZE = 50;

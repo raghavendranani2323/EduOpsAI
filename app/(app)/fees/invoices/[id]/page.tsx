@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { requireInstitution } from "@/lib/tenant/current";
@@ -14,7 +14,8 @@ import { headers } from "next/headers";
 
 export default async function InvoiceDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id }              = await params;
-  const { user, institution } = await requireInstitution();
+  const { user, institution, membership } = await requireInstitution();
+  if (membership.role === "TEACHER") redirect("/dashboard");
   const today               = todayIST();
 
   const invoice = await withRls(user.id, (tx) =>

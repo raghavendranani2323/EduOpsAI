@@ -23,7 +23,8 @@ const schema = z.object({
 
 export async function GET() {
   try {
-    const { user, institution } = await requireInstitution();
+    const { user, institution, membership } = await requireInstitution();
+    if (membership.role === "TEACHER") return NextResponse.json({ ok: false, error: "Not available for teacher accounts" }, { status: 403 });
     const plans = await withRls(user.id, (tx) =>
       tx.feePlan.findMany({
         where: { institutionId: institution.id },

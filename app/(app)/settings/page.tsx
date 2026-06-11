@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Users, GraduationCap, Building2, Bell, ChevronRight, Calendar, ShieldCheck, Download } from "lucide-react";
+import { requireInstitution } from "@/lib/tenant/current";
 import { SignOutButton } from "@/components/shell/sign-out-button";
 import { LanguageSwitcher } from "@/components/i18n/language-switcher";
 import { PushToggle } from "@/components/notifications/push-toggle";
@@ -16,15 +17,22 @@ const SETTINGS_LINKS = [
   { href: "/settings/audit-log",    icon: ShieldCheck,   labelKey: "auditLog",           descKey: "auditLogDesc" },
 ] as const;
 
+// Teachers manage their own device & notifications — institution admin stays hidden
+const TEACHER_VISIBLE = new Set(["/classes", "/settings/notifications"]);
+
 export default async function SettingsPage() {
+  const { membership } = await requireInstitution();
   const messages = getMessages(await getLocale());
+  const links = membership.role === "TEACHER"
+    ? SETTINGS_LINKS.filter(l => TEACHER_VISIBLE.has(l.href))
+    : SETTINGS_LINKS;
 
   return (
     <div className="p-4 md:p-6 space-y-4 max-w-2xl">
       <h1 className="text-xl font-bold">{messages.settingsPage.title}</h1>
 
       <div className="space-y-2">
-        {SETTINGS_LINKS.map(({ href, icon: Icon, labelKey, descKey }) => (
+        {links.map(({ href, icon: Icon, labelKey, descKey }) => (
           <Link
             key={href}
             href={href}

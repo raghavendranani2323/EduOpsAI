@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { requireInstitution } from "@/lib/tenant/current";
 import { withRls } from "@/lib/prisma/rls";
 import { AdmissionsClient } from "./admissions-client";
@@ -5,7 +6,8 @@ import { todayIST } from "@/lib/format/date";
 import type { Lead } from "@prisma/client";
 
 export default async function AdmissionsPage() {
-  const { user, institution } = await requireInstitution();
+  const { user, institution, membership } = await requireInstitution();
+  if (membership.role === "TEACHER") redirect("/dashboard");
   const today = new Date(todayIST());
 
   const { leads, classes, dueTodayCount } = await withRls(user.id, async (tx) => {

@@ -3,11 +3,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LazyMotion, domMax, m, LayoutGroup } from "framer-motion";
-import { LayoutDashboard, Layers, CalendarCheck, IndianRupee, MoreHorizontal } from "lucide-react";
+import { LayoutDashboard, Layers, CalendarCheck, IndianRupee, BookOpen, MoreHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/components/i18n/provider";
 
-const NAV_ITEMS = [
+const ADMIN_ITEMS = [
   { href: "/dashboard",    icon: LayoutDashboard, labelKey: "home"     },
   { href: "/classes",      icon: Layers,           labelKey: "classes"  },
   { href: "/attendance",   icon: CalendarCheck,    labelKey: "mark"     },
@@ -15,13 +15,23 @@ const NAV_ITEMS = [
   { href: "/more",         icon: MoreHorizontal,   labelKey: "more"     },
 ] as const;
 
+// Teachers get Homework where admins get Fees
+const TEACHER_ITEMS = [
+  { href: "/dashboard",    icon: LayoutDashboard, labelKey: "home"     },
+  { href: "/classes",      icon: Layers,           labelKey: "classes"  },
+  { href: "/attendance",   icon: CalendarCheck,    labelKey: "mark"     },
+  { href: "/homework",     icon: BookOpen,         labelKey: "homework" },
+  { href: "/more",         icon: MoreHorizontal,   labelKey: "more"     },
+] as const;
+
 // Routes with their own fixed bottom action bar — hide the nav so the
 // primary action (e.g. attendance Submit) is never covered.
 const FULLSCREEN_TASK_ROUTES = [/^\/attendance\/[^/]+/];
 
-export function BottomNav() {
+export function BottomNav({ role }: { role?: string }) {
   const pathname = usePathname();
   const { t } = useI18n();
+  const NAV_ITEMS = role === "TEACHER" ? TEACHER_ITEMS : ADMIN_ITEMS;
 
   if (FULLSCREEN_TASK_ROUTES.some(r => r.test(pathname))) return null;
 

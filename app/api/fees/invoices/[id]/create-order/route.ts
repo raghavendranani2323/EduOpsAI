@@ -5,7 +5,8 @@ import { createRazorpayOrder } from "@/lib/razorpay/client";
 
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { user, institution } = await requireInstitution();
+    const { user, institution, membership } = await requireInstitution();
+    if (membership.role === "TEACHER") return NextResponse.json({ ok: false, error: "Not available for teacher accounts" }, { status: 403 });
     const { id: invoiceId } = await params;
 
     const invoice = await withRls(user.id, (tx) =>

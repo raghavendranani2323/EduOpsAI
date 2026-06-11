@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import type { Prisma } from "@prisma/client";
 import { requireInstitution } from "@/lib/tenant/current";
 import { withRls } from "@/lib/prisma/rls";
@@ -13,7 +14,8 @@ export default async function FeesPage({
 }: {
   searchParams: Promise<{ status?: string; classId?: string; month?: string; q?: string; cursor?: string }>;
 }) {
-  const { user, institution } = await requireInstitution();
+  const { user, institution, membership } = await requireInstitution();
+  if (membership.role === "TEACHER") redirect("/dashboard");
   const sp     = await searchParams;
   const today  = todayIST();
 

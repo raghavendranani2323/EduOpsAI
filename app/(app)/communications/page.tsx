@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { requireInstitution } from "@/lib/tenant/current";
 import { withRls } from "@/lib/prisma/rls";
 import { CommunicationsClient } from "./communications-client";
@@ -9,7 +10,8 @@ type MessageWithTemplate = Prisma.MessageGetPayload<{
 }>;
 
 export default async function CommunicationsPage() {
-  const { user, institution } = await requireInstitution();
+  const { user, institution, membership } = await requireInstitution();
+  if (membership.role === "TEACHER") redirect("/dashboard");
 
   const { templates, messages, classes } = await withRls(user.id, async (tx) => {
     const [templates, messages, classes] = await Promise.all([

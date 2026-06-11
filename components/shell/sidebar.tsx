@@ -39,9 +39,17 @@ const NAV_SECTIONS = [
   },
 ] as const;
 
-export function Sidebar() {
+// Teachers only see what they act on — no fees, admissions or messaging admin
+const TEACHER_HIDDEN = new Set(["/fees", "/admissions", "/communications"]);
+
+export function Sidebar({ role }: { role?: string }) {
   const pathname = usePathname();
   const { t } = useI18n();
+  const sections = NAV_SECTIONS
+    .map(section => ({
+      items: section.items.filter(i => role !== "TEACHER" || !TEACHER_HIDDEN.has(i.href)),
+    }))
+    .filter(section => section.items.length > 0);
 
   return (
     <aside className="hidden md:flex flex-col w-60 bg-ink text-ink-foreground shrink-0 h-screen sticky top-0">
@@ -58,7 +66,7 @@ export function Sidebar() {
       <LazyMotion features={domAnimation} strict>
         <LayoutGroup id="sidebar-nav">
           <nav className="flex-1 px-3 overflow-y-auto scrollbar-none">
-            {NAV_SECTIONS.map((section, i) => (
+            {sections.map((section, i) => (
               <div key={i} className={cn("space-y-0.5", i > 0 && "mt-3 pt-3 border-t border-white/8")}>
                 {section.items.map(({ href, icon: Icon, labelKey }) => {
                   const active = pathname === href || pathname.startsWith(href + "/");

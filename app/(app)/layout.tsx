@@ -9,7 +9,7 @@ import { getMessages } from "@/lib/i18n/messages";
 import { OfflineIndicator } from "@/components/shell/offline-indicator";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const { institution, user } = await requireInstitution();
+  const { institution, user, membership } = await requireInstitution();
   const locale = await getLocale();
   const messages = getMessages(locale);
 
@@ -17,14 +17,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <I18nProvider locale={locale} messages={messages}>
       <InstitutionProvider institution={institution}>
         <div className="flex h-full">
-          <Sidebar />
+          <Sidebar role={membership.role} />
           <div className="flex-1 flex flex-col min-h-screen min-w-0 overflow-x-hidden">
-            <TopBar institutionName={institution.name} userEmail={user.email} />
+            <TopBar institutionName={institution.name} userEmail={user.email} role={membership.role} />
             <OfflineIndicator />
             <main className="flex-1 min-w-0 overflow-x-hidden overflow-y-auto pb-20 md:pb-0">
               {children}
             </main>
-            <BottomNav />
+            <BottomNav role={membership.role} />
           </div>
         </div>
       </InstitutionProvider>

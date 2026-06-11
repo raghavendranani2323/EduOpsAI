@@ -11,6 +11,7 @@ import { useI18n } from "@/components/i18n/provider";
 interface TopBarProps {
   institutionName: string;
   userEmail?: string | null;
+  role?: string;
 }
 
 const MORE_LINKS = [
@@ -25,10 +26,13 @@ const MORE_LINKS = [
   { href: "/settings",       icon: Settings,        labelKey: "settings"       },
 ] as const;
 
-export function TopBar({ institutionName, userEmail }: TopBarProps) {
+const TEACHER_HIDDEN = new Set(["/fees", "/admissions", "/communications"]);
+
+export function TopBar({ institutionName, userEmail, role }: TopBarProps) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
   const { t } = useI18n();
+  const links = MORE_LINKS.filter(l => role !== "TEACHER" || !TEACHER_HIDDEN.has(l.href));
 
   async function signOut() {
     const supabase = createClient();
@@ -72,7 +76,7 @@ export function TopBar({ institutionName, userEmail }: TopBarProps) {
           </SheetHeader>
           <SheetBody>
             <div className="grid grid-cols-3 gap-2">
-              {MORE_LINKS.map(({ href, icon: Icon, labelKey }) => (
+              {links.map(({ href, icon: Icon, labelKey }) => (
                 <Link
                   key={href}
                   href={href}
