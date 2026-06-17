@@ -6,12 +6,16 @@ Updated: 18/06/2026
 
 - Branch: `audit/non-payment-remediation`
 - Starting commit: `43ec904ab1d5e3919df1e229c272b25c6b34a513`
-- Last completed remediation commit: `748493e enforce role and tenant permissions`
+- Last completed remediation commit: `09eaea2 strengthen non-payment data integrity`
 
 ## Current Phase
 
-Phase 3 - non-payment data integrity is in progress. Phase 2 is locally
-complete; live RLS and distinct-role verification remain pending.
+Phase 3 - non-payment data integrity is locally complete. Live migration,
+trigger, query-plan, RLS, and distinct-role verification remain pending.
+
+- Last completed issue: `DB-001`
+- Next exact phase: Phase 4 - admissions, parent access, and communications
+- Next exact issue: `CRM-001`
 
 ## Completed
 
@@ -34,6 +38,16 @@ complete; live RLS and distinct-role verification remain pending.
 - Marks entry validates student, subject, class, tenant, duplicates, and total
   marks before writing.
 - A formal permission matrix and `prismaAdmin` allowlist are documented.
+- Phase 3 schema risk inventory and index review are documented.
+- Class academic-year relations are authoritative and legacy labels are
+  database-maintained mirrors.
+- Tenant-scoped admission, pending-invitation, class-section, and subject
+  uniqueness rules are implemented.
+- Cross-tenant relationship and timetable-overlap triggers are implemented.
+- Student deletion archives records; classes with operational history cannot
+  be deleted.
+- Student/timetable application validation, audit events, migration prechecks,
+  and seed compatibility are implemented.
 
 ## Partial Or Blocked
 
@@ -43,6 +57,8 @@ complete; live RLS and distinct-role verification remain pending.
   project and role fixtures.
 - Push provider delivery: blocked without staging VAPID configuration.
 - Invitation email lifecycle: blocked without staging Auth/SMTP configuration.
+- Phase 7 live migration, trigger transaction tests, index query plans, and
+  lock timing: blocked without a restored staging database.
 
 ## Deferred
 
@@ -55,6 +71,7 @@ complete; live RLS and distinct-role verification remain pending.
 - `pnpm test:phase1`: passed.
 - `pnpm test:api-foundations`: passed.
 - `pnpm test:permissions`: passed.
+- `pnpm test:data-integrity`: passed.
 - `pnpm test:migrations`: static verification passed; live verification
   skipped because `RLS_TEST_SUPERUSER_URL` is unavailable.
 - `pnpm typecheck`: passed.
@@ -78,16 +95,15 @@ complete; live RLS and distinct-role verification remain pending.
 ## Manual Actions
 
 1. Provide dedicated non-production RLS test database credentials.
-2. Apply and verify Phase 1 SQL on staging after a backup.
+2. Apply and verify Phase 1-3 SQL on staging after a backup, in phase order.
 3. Confirm the `homework` bucket is private.
 4. Configure staging Auth redirects, SMTP, VAPID, and internal push token.
 
 ## Resume
 
-Continue Phase 3 from the reviewed uncommitted schema, migration, and static
-test work. Complete the schema risk inventory, duplicate/cross-tenant
-preflights, application validation, evidence, and required tests before
-committing Phase 3. Apply
-`phase5_api_foundations.sql` and `phase6_permission_hardening.sql` in order
-before staging verification. Re-run live Phase 0-2 checks when staging
-credentials and role fixtures are available.
+Continue with Phase 4: admissions, parent access, and communications. Start
+with `CRM-001`, then `PARENT-001`, then `MSG-001`. Apply
+`phase5_api_foundations.sql`, `phase6_permission_hardening.sql`, and
+`phase7_non_payment_data_integrity.sql` in order before staging verification.
+Re-run live Phase 0-3 checks when staging credentials and role fixtures are
+available.
