@@ -2,10 +2,18 @@ import { NextResponse } from "next/server";
 import { requireInstitution } from "@/lib/tenant/current";
 import { withRls } from "@/lib/prisma/rls";
 import { csvResponse } from "@/lib/export/csv";
+import { writeAuditEvent } from "@/lib/audit/server";
 
 export async function GET() {
   const { user, institution, membership } = await requireInstitution();
   if (!["OWNER", "ADMIN"].includes(membership.role)) {
+    await writeAuditEvent({
+      actorUserId: user.id,
+      institutionId: institution.id,
+      action: "export.students",
+      outcome: "denied",
+      meta: { role: membership.role },
+    });
     return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
   }
 
@@ -41,6 +49,14 @@ export async function GET() {
       "Guardian Phone":  g?.phone ?? "",
       "Created":        s.createdAt.toISOString().split("T")[0],
     };
+  });
+
+  await writeAuditEvent({
+    actorUserId: user.id,
+    institutionId: institution.id,
+    action: "export.students",
+    outcome: "success",
+    meta: { rowCount: records.length },
   });
 
   return csvResponse(records, `students-${institution.name.replace(/\s+/g, "_")}-${new Date().toISOString().split("T")[0]}.csv`);

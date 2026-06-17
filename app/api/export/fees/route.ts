@@ -2,10 +2,18 @@ import { NextResponse } from "next/server";
 import { requireInstitution } from "@/lib/tenant/current";
 import { withRls } from "@/lib/prisma/rls";
 import { csvResponse } from "@/lib/export/csv";
+import { writeAuditEvent } from "@/lib/audit/server";
 
 export async function GET(req: Request) {
   const { user, institution, membership } = await requireInstitution();
   if (!["OWNER", "ADMIN", "ACCOUNTANT"].includes(membership.role)) {
+    await writeAuditEvent({
+      actorUserId: user.id,
+      institutionId: institution.id,
+      action: "export.fees",
+      outcome: "denied",
+      meta: { role: membership.role },
+    });
     return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
   }
 
@@ -46,6 +54,14 @@ export async function GET(req: Request) {
     "Status":       inv.status,
     "Notes":        inv.notes ?? "",
   }));
+
+  await writeAuditEvent({
+    actorUserId: user.id,
+    institutionId: institution.id,
+    action: "export.fees",
+    outcome: "success",
+    meta: { rowCount: records.length, month: month || null },
+  });
 
   return csvResponse(records, `fees-${month || "all"}-${new Date().toISOString().split("T")[0]}.csv`);
 }
