@@ -28,7 +28,7 @@ Phase 1 implementation is complete in code. CSV safety is fully verified locally
 - Files: `app/api/push/send/route.ts`, `app/api/push/subscribe/route.ts`, `lib/push/send-security.ts`.
 - Decision: require a configured internal token, constant-time credential comparison, explicit institution and recipient IDs, active membership validation, payload limits, internal URLs, rate limiting, stale subscription removal, and audit events.
 - Tests: missing configuration, invalid credential, internal/external URL, payload size, rejected implicit broadcast, and valid explicit recipient schema.
-- Result: local security tests pass. Provider delivery is pending.
+- Result: local security tests pass. Production-mode smoke test returned 503 when the push token was not configured. Provider delivery is pending.
 - Manual configuration: set `PUSH_SEND_TOKEN` and valid VAPID settings in the deployment secret store.
 
 ## EXPORT-001 - CSV Formula Injection

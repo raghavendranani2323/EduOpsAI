@@ -38,6 +38,7 @@ export async function proxy(request: NextRequest) {
     pathname === "/" ||
     pathname.startsWith("/api/razorpay") ||
     pathname.startsWith("/api/auth") ||
+    pathname === "/api/push/send" ||
     pathname.startsWith("/onboarding") ||
     pathname.startsWith("/p/") ||
     pathname.startsWith("/api/p/") ||

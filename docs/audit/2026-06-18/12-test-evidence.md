@@ -201,6 +201,7 @@ Legal conclusions were not made. Compliance items are recommendations requiring 
 | `pnpm test:rls` | Not executed against a database. The harness now fails safely because `RLS_TEST_SUPERUSER_URL` and `RLS_TEST_APP_USER_URL` are not configured. Embedded credential fallbacks were removed. |
 | `pnpm audit --audit-level moderate` | Failed: 8 advisories (1 high, 6 moderate, 1 low), including transitive Hono/@hono/node-server issues through Prisma dev tooling and PostCSS through Next.js. |
 | `git diff --check` | Passed after removing one trailing blank line; line-ending conversion warnings remain informational on Windows. |
+| Production API smoke test | `/api/push/send` without configured token returned 503; anonymous attendance and homework upload requests returned 307 to login. |
 
 ### Focused Scenarios
 
