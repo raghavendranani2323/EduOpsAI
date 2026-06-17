@@ -1,50 +1,141 @@
 import { NextResponse } from "next/server";
 import { prismaAdmin } from "@/lib/prisma/admin";
 import { getPushConfig, webpush } from "@/lib/push/config";
+import { ApiError, errorResponse, serverErrorResponse } from "@/lib/api/errors";
+import { writeAuditEvent } from "@/lib/audit/server";
+import {
+  assertPushPayloadSize,
+  assertPushSendToken,
+  pushSendSchema,
+  validatePushUrl,
+} from "@/lib/push/send-security";
 
 export async function POST(req: Request) {
-  const cfg = getPushConfig();
-  if (!cfg) return NextResponse.json({ ok: false, error: "Push not configured" }, { status: 503 });
+  let audit: { institutionId?: string; purpose?: string } = {};
+  try {
+    assertPushSendToken(req);
+    const cfg = getPushConfig();
+    if (!cfg) throw new ApiError(503, "PUSH_NOT_CONFIGURED", "Push notifications are not configured");
 
-  if (process.env.PUSH_SEND_TOKEN && req.headers.get("x-push-token") !== process.env.PUSH_SEND_TOKEN) {
-    return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-  }
-
-  const body = await req.json().catch(() => ({}));
-  const title   = body.title ?? "EduOps AI";
-  const message = body.body ?? "";
-  const url     = body.url ?? "/dashboard";
-  const userId  = body.userId as string | undefined;
-
-  const subs = await prismaAdmin.pushSubscription.findMany({
-    where: userId ? { userId } : {},
-    take: 500,
-  });
-
-  if (subs.length === 0) {
-    return NextResponse.json({ ok: true, sent: 0, total: 0 });
-  }
-
-  const payload = JSON.stringify({ title, body: message, url, tag: body.tag ?? "eduops" });
-  let sent = 0;
-  const stale: string[] = [];
-
-  await Promise.all(subs.map(async (s) => {
-    try {
-      await webpush.sendNotification(
-        { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
-        payload,
-      );
-      sent++;
-    } catch (err) {
-      const code = (err as { statusCode?: number }).statusCode;
-      if (code === 404 || code === 410) stale.push(s.endpoint);
+    const parsed = pushSendSchema.safeParse(await req.json().catch(() => null));
+    if (!parsed.success) {
+      throw new ApiError(400, "INVALID_PUSH_REQUEST", parsed.error.issues[0]?.message ?? "Invalid push request");
     }
-  }));
+    const body = parsed.data;
+    audit = { institutionId: body.institutionId, purpose: body.purpose };
+    const url = validatePushUrl(body.url);
 
-  if (stale.length) {
-    await prismaAdmin.pushSubscription.deleteMany({ where: { endpoint: { in: stale } } });
+    const recentCount = await prismaAdmin.auditLog.count({
+      where: {
+        institutionId: body.institutionId,
+        action: "push.send",
+        createdAt: { gte: new Date(Date.now() - 60 * 60 * 1000) },
+      },
+    });
+    if (recentCount >= 60) {
+      throw new ApiError(429, "PUSH_RATE_LIMITED", "Too many push notifications. Try again later");
+    }
+
+    const requestedUserIds = [...new Set(body.recipientUserIds)];
+    const members = await prismaAdmin.membership.findMany({
+      where: {
+        institutionId: body.institutionId,
+        revokedAt: null,
+        userId: { in: requestedUserIds },
+      },
+      select: { userId: true },
+      take: 500,
+    });
+
+    if (members.length !== requestedUserIds.length) {
+      throw new ApiError(403, "PUSH_RECIPIENT_FORBIDDEN", "One or more recipients are not in this institution");
+    }
+
+    const memberUserIds = members.map((member) => member.userId);
+    if (memberUserIds.length === 0) {
+      await writeAuditEvent({
+        actorUserId: "system:push",
+        institutionId: body.institutionId,
+        action: "push.send",
+        outcome: "success",
+        meta: { purpose: body.purpose, sent: 0, total: 0 },
+      });
+      return NextResponse.json({ ok: true, sent: 0, total: 0, removed: 0 });
+    }
+
+    const subs = await prismaAdmin.pushSubscription.findMany({
+      where: { userId: { in: memberUserIds } },
+      take: 500,
+    });
+
+    if (subs.length === 0) {
+      await writeAuditEvent({
+        actorUserId: "system:push",
+        institutionId: body.institutionId,
+        action: "push.send",
+        outcome: "success",
+        meta: { purpose: body.purpose, sent: 0, total: 0 },
+      });
+      return NextResponse.json({ ok: true, sent: 0, total: 0, removed: 0 });
+    }
+
+    const payload = JSON.stringify({
+      title: body.title,
+      body: body.body,
+      url,
+      tag: body.tag ?? `eduops-${body.purpose}`,
+    });
+    assertPushPayloadSize(payload);
+
+    let sent = 0;
+    const stale: string[] = [];
+
+    await Promise.all(subs.map(async (s) => {
+      try {
+        await webpush.sendNotification(
+          { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
+          payload,
+        );
+        sent++;
+      } catch (err) {
+        const code = (err as { statusCode?: number }).statusCode;
+        if (code === 404 || code === 410) stale.push(s.endpoint);
+        else console.error("[push/send] provider failure", { code });
+      }
+    }));
+
+    if (stale.length) {
+      await prismaAdmin.pushSubscription.deleteMany({ where: { endpoint: { in: stale } } });
+    }
+
+    await writeAuditEvent({
+      actorUserId: "system:push",
+      institutionId: body.institutionId,
+      action: "push.send",
+      outcome: "success",
+      meta: { purpose: body.purpose, sent, total: subs.length, removed: stale.length },
+    });
+
+    return NextResponse.json({ ok: true, sent, removed: stale.length, total: subs.length });
+  } catch (err) {
+    if (err instanceof ApiError) {
+      await writeAuditEvent({
+        actorUserId: "system:push",
+        institutionId: audit.institutionId ?? null,
+        action: "push.send",
+        outcome: err.status === 401 || err.status === 403 ? "denied" : "failure",
+        meta: { code: err.code, purpose: audit.purpose },
+      });
+      return errorResponse(err);
+    }
+    console.error("[push/send] failed", err instanceof Error ? err.message : err);
+    await writeAuditEvent({
+      actorUserId: "system:push",
+      institutionId: audit.institutionId ?? null,
+      action: "push.send",
+      outcome: "failure",
+      meta: { purpose: audit.purpose },
+    });
+    return serverErrorResponse("Failed to send push notification");
   }
-
-  return NextResponse.json({ ok: true, sent, removed: stale.length, total: subs.length });
 }
