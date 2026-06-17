@@ -6,12 +6,12 @@ Updated: 18/06/2026
 
 - Branch: `audit/non-payment-remediation`
 - Starting commit: `43ec904ab1d5e3919df1e229c272b25c6b34a513`
-- Last commit: pending Phase 0 commit
+- Last completed remediation commit: `748493e enforce role and tenant permissions`
 
 ## Current Phase
 
-Phase 2 - role and tenant permission matrix locally complete; live RLS and
-distinct-role verification pending.
+Phase 3 - non-payment data integrity is in progress. Phase 2 is locally
+complete; live RLS and distinct-role verification remain pending.
 
 ## Completed
 
@@ -84,7 +84,10 @@ distinct-role verification pending.
 
 ## Resume
 
-Continue with Phase 3 non-payment data integrity and indexes. Apply
+Continue Phase 3 from the reviewed uncommitted schema, migration, and static
+test work. Complete the schema risk inventory, duplicate/cross-tenant
+preflights, application validation, evidence, and required tests before
+committing Phase 3. Apply
 `phase5_api_foundations.sql` and `phase6_permission_hardening.sql` in order
 before staging verification. Re-run live Phase 0-2 checks when staging
 credentials and role fixtures are available.
