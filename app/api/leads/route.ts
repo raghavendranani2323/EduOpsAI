@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireInstitution } from "@/lib/tenant/current";
+import { requireApiInstitution } from "@/lib/api/auth";
 import { withRls } from "@/lib/prisma/rls";
+import { ApiError, errorResponse, serverErrorResponse } from "@/lib/api/errors";
+import { assertRole } from "@/lib/auth/permissions";
 
 const leadSchema = z.object({
   studentName:     z.string().min(1).max(200),
@@ -17,8 +19,8 @@ const leadSchema = z.object({
 
 export async function GET(req: Request) {
   try {
-    const { user, institution, membership } = await requireInstitution();
-    if (membership.role === "TEACHER") return NextResponse.json({ ok: false, error: "Not available for teacher accounts" }, { status: 403 });
+    const { user, institution, membership } = await requireApiInstitution();
+    assertRole(membership.role, ["OWNER", "ADMIN"], "LEAD_ACCESS_FORBIDDEN", "Admissions are available only to owners and admins");
     const { searchParams } = new URL(req.url);
     const stage    = searchParams.get("stage") ?? "ALL";
     const priority = searchParams.get("priority") ?? "ALL";
@@ -37,15 +39,16 @@ export async function GET(req: Request) {
     );
 
     return NextResponse.json({ ok: true, leads });
-  } catch {
-    return NextResponse.json({ ok: false, error: "Unauthorised" }, { status: 401 });
+  } catch (err) {
+    if (err instanceof ApiError) return errorResponse(err);
+    return serverErrorResponse("Failed to load leads");
   }
 }
 
 export async function POST(req: Request) {
   try {
-    const { user, institution, membership } = await requireInstitution();
-    if (membership.role === "TEACHER") return NextResponse.json({ ok: false, error: "Not available for teacher accounts" }, { status: 403 });
+    const { user, institution, membership } = await requireApiInstitution();
+    assertRole(membership.role, ["OWNER", "ADMIN"], "LEAD_CREATE_FORBIDDEN", "Admissions are available only to owners and admins");
     const parsed = leadSchema.safeParse(await req.json());
     if (!parsed.success) {
       return NextResponse.json({ ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
@@ -70,8 +73,8 @@ export async function POST(req: Request) {
     );
 
     return NextResponse.json({ ok: true, lead });
-  } catch (e) {
-    console.error(e);
-    return NextResponse.json({ ok: false, error: "Failed to create lead" }, { status: 500 });
+  } catch (err) {
+    if (err instanceof ApiError) return errorResponse(err);
+    return serverErrorResponse("Failed to create lead");
   }
 }

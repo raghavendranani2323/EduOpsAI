@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { requireInstitution } from "@/lib/tenant/current";
+import { requireApiInstitution } from "@/lib/api/auth";
 import { withRls } from "@/lib/prisma/rls";
 import { getTeacherClassIds } from "@/lib/tenant/teacher-scope";
 import { ApiError, errorResponse, serverErrorResponse } from "@/lib/api/errors";
 import { writeAuditEvent } from "@/lib/audit/server";
 import { isHomeworkObjectKeyForClass } from "@/lib/homework/attachments";
+import { assertRole } from "@/lib/auth/permissions";
 
 const homeworkSchema = z.object({
   classId: z.string().min(1).max(191),
@@ -19,7 +20,8 @@ const homeworkSchema = z.object({
 
 export async function GET(req: NextRequest) {
   try {
-    const { user, institution, membership } = await requireInstitution();
+    const { user, institution, membership } = await requireApiInstitution();
+    assertRole(membership.role, ["OWNER", "ADMIN", "TEACHER"], "HOMEWORK_ACCESS_FORBIDDEN", "Homework is not available for this role");
     const { searchParams } = new URL(req.url);
     const classId = searchParams.get("classId");
 
@@ -43,7 +45,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const { user, institution, membership } = await requireInstitution();
+    const { user, institution, membership } = await requireApiInstitution();
     const parsed = homeworkSchema.safeParse(await req.json().catch(() => null));
     if (!parsed.success) {
       throw new ApiError(400, "INVALID_HOMEWORK", parsed.error.issues[0]?.message ?? "Invalid homework");

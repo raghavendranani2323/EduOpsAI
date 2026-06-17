@@ -284,3 +284,37 @@ binary was downloaded during this remediation.
 
 Manual action: apply `prisma/migrations/phase5_api_foundations.sql` to staging
 before testing rate-limited endpoints.
+
+## Phase 2 Permission Matrix - 18/06/2026
+
+Implemented:
+
+- Shared role and class-resource authorization helpers.
+- Assigned-teacher scoping for class, subject, exam, timetable, attendance,
+  homework, notice, student-detail, and marks workflows.
+- Accountant denial for academic/admin APIs while preserving fee workflow
+  access.
+- Owner/admin-only mutations for classes, students, subjects, exams,
+  timetable, and admissions.
+- Teacher notices limited to the teacher's own assigned-class notices.
+- Marks-entry validation for tenant/class student scope, subject scope,
+  duplicate pairs, inactive students, and total marks.
+- RLS backstop through `can_access_class` and hardened policies.
+- Formal permission matrix and `prismaAdmin` allowlist.
+
+Validation:
+
+| Command | Result |
+|---|---|
+| `pnpm test:permissions` | Passed. |
+| `pnpm test:phase1` | Passed. |
+| `pnpm test:api-foundations` | Passed. |
+| `pnpm test:migrations` | Static verification passed; live database check blocked. |
+| `pnpm typecheck` | Passed. |
+| `pnpm lint` | Passed with 0 errors and 18 existing warnings. |
+| `pnpm build` | Passed; 69 routes generated. |
+
+Live role/tenant API and RLS testing remains blocked without distinct staging
+identities and dedicated database URLs. Apply
+`prisma/migrations/phase6_permission_hardening.sql` after the earlier security
+migrations before running those tests.

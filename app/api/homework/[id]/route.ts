@@ -10,7 +10,7 @@ import {
   isHomeworkObjectKeyForInstitution,
 } from "@/lib/homework/attachments";
 import { withRls } from "@/lib/prisma/rls";
-import { requireInstitution } from "@/lib/tenant/current";
+import { requireApiInstitution } from "@/lib/api/auth";
 import { getTeacherClassIds } from "@/lib/tenant/teacher-scope";
 
 const updateSchema = z.object({
@@ -49,7 +49,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const { id } = await params;
   let audit: { actorUserId: string; institutionId: string } | null = null;
   try {
-    const { user, institution, membership } = await requireInstitution();
+    const { user, institution, membership } = await requireApiInstitution();
     audit = { actorUserId: user.id, institutionId: institution.id };
     const parsed = updateSchema.safeParse(await req.json().catch(() => null));
     if (!parsed.success) {
@@ -149,7 +149,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   const { id } = await params;
   let audit: { actorUserId: string; institutionId: string } | null = null;
   try {
-    const { user, institution, membership } = await requireInstitution();
+    const { user, institution, membership } = await requireApiInstitution();
     audit = { actorUserId: user.id, institutionId: institution.id };
 
     const deleted = await withRls(user.id, async (tx) => {

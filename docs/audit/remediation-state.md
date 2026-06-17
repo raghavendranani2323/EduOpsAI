@@ -10,8 +10,8 @@ Updated: 18/06/2026
 
 ## Current Phase
 
-Phase 1 - shared API, authorisation, and audit foundations locally complete;
-live database verification pending.
+Phase 2 - role and tenant permission matrix locally complete; live RLS and
+distinct-role verification pending.
 
 ## Completed
 
@@ -29,6 +29,11 @@ live database verification pending.
   push, communications, fee reminders, and homework uploads.
 - Production security headers include CSP, frame protection, nosniff,
   referrer policy, permissions policy, and HSTS.
+- Shared academic permission helpers enforce assigned-class access.
+- Academic RLS policies now deny accountants and unassigned teachers.
+- Marks entry validates student, subject, class, tenant, duplicates, and total
+  marks before writing.
+- A formal permission matrix and `prismaAdmin` allowlist are documented.
 
 ## Partial Or Blocked
 
@@ -49,6 +54,7 @@ live database verification pending.
 
 - `pnpm test:phase1`: passed.
 - `pnpm test:api-foundations`: passed.
+- `pnpm test:permissions`: passed.
 - `pnpm test:migrations`: static verification passed; live verification
   skipped because `RLS_TEST_SUPERUSER_URL` is unavailable.
 - `pnpm typecheck`: passed.
@@ -78,6 +84,7 @@ live database verification pending.
 
 ## Resume
 
-Continue with Phase 2 role and tenant permission matrix. Apply
-`phase5_api_foundations.sql` before exercising rate-limited routes in staging.
-Re-run live Phase 0/1 checks when staging credentials are available.
+Continue with Phase 3 non-payment data integrity and indexes. Apply
+`phase5_api_foundations.sql` and `phase6_permission_hardening.sql` in order
+before staging verification. Re-run live Phase 0-2 checks when staging
+credentials and role fixtures are available.

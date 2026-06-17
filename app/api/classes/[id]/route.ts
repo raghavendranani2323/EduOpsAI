@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
-import { requireInstitution } from "@/lib/tenant/current";
+import { requireApiInstitution } from "@/lib/api/auth";
 import { withRls } from "@/lib/prisma/rls";
+import { ApiError, errorResponse, serverErrorResponse } from "@/lib/api/errors";
+import { assertRole } from "@/lib/auth/permissions";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { user, institution } = await requireInstitution();
+    const { user, institution, membership } = await requireApiInstitution();
+    assertRole(membership.role, ["OWNER", "ADMIN"], "CLASS_UPDATE_FORBIDDEN", "Only owners and admins can update classes");
     const { id } = await params;
     const body = await req.json() as {
       name?: string;
@@ -55,14 +58,16 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
     if (cls.count === 0) return NextResponse.json({ ok: false, error: "Not found" }, { status: 404 });
     return NextResponse.json({ ok: true });
-  } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Unauthorised" }, { status: 401 });
+  } catch (err) {
+    if (err instanceof ApiError) return errorResponse(err);
+    return serverErrorResponse("Failed to update class");
   }
 }
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { user, institution } = await requireInstitution();
+    const { user, institution, membership } = await requireApiInstitution();
+    assertRole(membership.role, ["OWNER", "ADMIN"], "CLASS_DELETE_FORBIDDEN", "Only owners and admins can delete classes");
     const { id } = await params;
 
     // Unassign students before deleting the class
@@ -75,7 +80,8 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     });
 
     return NextResponse.json({ ok: true });
-  } catch {
-    return NextResponse.json({ ok: false, error: "Unauthorised" }, { status: 401 });
+  } catch (err) {
+    if (err instanceof ApiError) return errorResponse(err);
+    return serverErrorResponse("Failed to delete class");
   }
 }

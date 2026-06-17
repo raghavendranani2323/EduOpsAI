@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
-import { requireInstitution } from "@/lib/tenant/current";
+import { requireApiInstitution } from "@/lib/api/auth";
 import { withRls } from "@/lib/prisma/rls";
+import { ApiError, errorResponse, serverErrorResponse } from "@/lib/api/errors";
+import { assertRole } from "@/lib/auth/permissions";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { user, institution, membership } = await requireInstitution();
-    if (membership.role === "TEACHER") return NextResponse.json({ ok: false, error: "Not available for teacher accounts" }, { status: 403 });
+    const { user, institution, membership } = await requireApiInstitution();
+    assertRole(membership.role, ["OWNER", "ADMIN"], "LEAD_UPDATE_FORBIDDEN", "Admissions are available only to owners and admins");
     const { id } = await params;
     const body = await req.json() as Record<string, unknown>;
 
@@ -28,16 +30,16 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
     if (count.count === 0) return NextResponse.json({ ok: false, error: "Not found" }, { status: 404 });
     return NextResponse.json({ ok: true });
-  } catch (e) {
-    console.error(e);
-    return NextResponse.json({ ok: false, error: String(e) }, { status: 500 });
+  } catch (err) {
+    if (err instanceof ApiError) return errorResponse(err);
+    return serverErrorResponse("Failed to update lead");
   }
 }
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { user, institution, membership } = await requireInstitution();
-    if (membership.role === "TEACHER") return NextResponse.json({ ok: false, error: "Not available for teacher accounts" }, { status: 403 });
+    const { user, institution, membership } = await requireApiInstitution();
+    assertRole(membership.role, ["OWNER", "ADMIN"], "LEAD_DELETE_FORBIDDEN", "Admissions are available only to owners and admins");
     const { id } = await params;
 
     await withRls(user.id, (tx) =>
@@ -45,8 +47,8 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     );
 
     return NextResponse.json({ ok: true });
-  } catch (e) {
-    console.error(e);
-    return NextResponse.json({ ok: false, error: String(e) }, { status: 500 });
+  } catch (err) {
+    if (err instanceof ApiError) return errorResponse(err);
+    return serverErrorResponse("Failed to delete lead");
   }
 }

@@ -4,11 +4,13 @@ import { Client } from "pg";
 const attendancePath = "prisma/migrations/phase4_attendance_integrity.sql";
 const invitationsPath = "prisma/migrations/phase4_secure_staff_invitations.sql";
 const foundationsPath = "prisma/migrations/phase5_api_foundations.sql";
+const permissionsPath = "prisma/migrations/phase6_permission_hardening.sql";
 
-const [attendanceSql, invitationsSql, foundationsSql] = await Promise.all([
+const [attendanceSql, invitationsSql, foundationsSql, permissionsSql] = await Promise.all([
   readFile(attendancePath, "utf8"),
   readFile(invitationsPath, "utf8"),
   readFile(foundationsPath, "utf8"),
+  readFile(permissionsPath, "utf8"),
 ]);
 
 const requiredAttendancePolicies = [
@@ -31,6 +33,9 @@ for (const column of ['"fullName"', "phone", "designation", "qualification"]) {
 }
 if (!foundationsSql.includes("CREATE TABLE IF NOT EXISTS rate_limit_counters")) {
   throw new Error(`${foundationsPath} is missing rate_limit_counters`);
+}
+if (!permissionsSql.includes("CREATE OR REPLACE FUNCTION can_access_class")) {
+  throw new Error(`${permissionsPath} is missing can_access_class`);
 }
 
 const url = process.env.RLS_TEST_SUPERUSER_URL;
@@ -81,6 +86,15 @@ try {
   `);
   if (rateLimitTable.rowCount !== 1 || !rateLimitTable.rows[0].relrowsecurity) {
     throw new Error("Rate limit table is missing or RLS is not enabled");
+  }
+
+  const permissionFunction = await db.query(`
+    SELECT 1
+    FROM pg_proc
+    WHERE proname = 'can_access_class'
+  `);
+  if (permissionFunction.rowCount !== 1) {
+    throw new Error("Class permission function is not applied");
   }
 
   console.log("Security migrations are present and RLS remains enabled.");
