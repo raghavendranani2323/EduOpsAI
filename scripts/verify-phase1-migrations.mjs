@@ -6,13 +6,15 @@ const invitationsPath = "prisma/migrations/phase4_secure_staff_invitations.sql";
 const foundationsPath = "prisma/migrations/phase5_api_foundations.sql";
 const permissionsPath = "prisma/migrations/phase6_permission_hardening.sql";
 const integrityPath = "prisma/migrations/phase7_non_payment_data_integrity.sql";
+const crmPath = "prisma/migrations/phase8_admissions_crm.sql";
 
-const [attendanceSql, invitationsSql, foundationsSql, permissionsSql, integritySql] = await Promise.all([
+const [attendanceSql, invitationsSql, foundationsSql, permissionsSql, integritySql, crmSql] = await Promise.all([
   readFile(attendancePath, "utf8"),
   readFile(invitationsPath, "utf8"),
   readFile(foundationsPath, "utf8"),
   readFile(permissionsPath, "utf8"),
   readFile(integrityPath, "utf8"),
+  readFile(crmPath, "utf8"),
 ]);
 
 const requiredAttendancePolicies = [
@@ -25,6 +27,15 @@ const requiredAttendancePolicies = [
 for (const policy of requiredAttendancePolicies) {
   if (!attendanceSql.includes(`CREATE POLICY ${policy}`)) {
     throw new Error(`${attendancePath} is missing ${policy}`);
+  }
+}
+for (const required of [
+  "CREATE TABLE IF NOT EXISTS lead_activities",
+  "CREATE TRIGGER leads_owner_scope",
+  "CREATE POLICY lead_activity_select",
+]) {
+  if (!crmSql.includes(required)) {
+    throw new Error(`${crmPath} is missing ${required}`);
   }
 }
 

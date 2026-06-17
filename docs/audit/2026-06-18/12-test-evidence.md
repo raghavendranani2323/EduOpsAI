@@ -345,3 +345,16 @@ Validation:
 Live migration execution, trigger/RLS transactions, query plans, lock timing,
 and realistic database index sizes remain blocked until a restored staging
 database and dedicated RLS URLs are available.
+
+## Phase 4 CRM-001 - 18/06/2026
+
+| Command | Result |
+|---|---|
+| `pnpm test:phase4-crm` | Passed duplicate, owner, migration, history, lost-reason, mobile action, and conversion static/unit checks. |
+| `pnpm test:migrations` | Static verification passed; live CRM migration/RLS checks blocked. |
+| `pnpm test:permissions` | Passed. |
+| `pnpm typecheck` | Passed. |
+| `pnpm lint` | Passed with 18 existing warnings and no errors. |
+
+Live role sessions, activity RLS, and database-trigger execution remain blocked
+without staging identities and dedicated database credentials.

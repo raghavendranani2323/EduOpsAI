@@ -10,12 +10,11 @@ Updated: 18/06/2026
 
 ## Current Phase
 
-Phase 3 - non-payment data integrity is locally complete. Live migration,
-trigger, query-plan, RLS, and distinct-role verification remain pending.
+Phase 4 - CRM-001 is locally complete. Parent access and communications remain.
 
-- Last completed issue: `DB-001`
+- Last completed issue: `CRM-001`
 - Next exact phase: Phase 4 - admissions, parent access, and communications
-- Next exact issue: `CRM-001`
+- Next exact issue: `PARENT-001`
 
 ## Completed
 
@@ -48,6 +47,9 @@ trigger, query-plan, RLS, and distinct-role verification remain pending.
   be deleted.
 - Student/timetable application validation, audit events, migration prechecks,
   and seed compatibility are implemented.
+- Admissions now includes overdue follow-ups, call/WhatsApp actions, quick
+  notes, durable activity history, ownership, lost reasons, duplicate signals,
+  safe conversion conflicts, and conversion audit history.
 
 ## Partial Or Blocked
 
@@ -72,6 +74,7 @@ trigger, query-plan, RLS, and distinct-role verification remain pending.
 - `pnpm test:api-foundations`: passed.
 - `pnpm test:permissions`: passed.
 - `pnpm test:data-integrity`: passed.
+- `pnpm test:phase4-crm`: passed.
 - `pnpm test:migrations`: static verification passed; live verification
   skipped because `RLS_TEST_SUPERUSER_URL` is unavailable.
 - `pnpm typecheck`: passed.
@@ -101,9 +104,8 @@ trigger, query-plan, RLS, and distinct-role verification remain pending.
 
 ## Resume
 
-Continue with Phase 4: admissions, parent access, and communications. Start
-with `CRM-001`, then `PARENT-001`, then `MSG-001`. Apply
+Continue Phase 4 with `PARENT-001`, then `MSG-001`. Apply
 `phase5_api_foundations.sql`, `phase6_permission_hardening.sql`, and
-`phase7_non_payment_data_integrity.sql` in order before staging verification.
-Re-run live Phase 0-3 checks when staging credentials and role fixtures are
-available.
+`phase7_non_payment_data_integrity.sql`, then `phase8_admissions_crm.sql` in
+order before staging verification. Re-run live Phase 0-4 checks when staging
+credentials and role fixtures are available.

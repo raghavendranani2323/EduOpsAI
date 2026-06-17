@@ -32,6 +32,8 @@ model Profile {
   timetableSlots    TimetableSlot[]
   homeworkCreated   Homework[]
   noticesAuthored   Notice[]
+  leadsAssigned     Lead[]              @relation("LeadOwner")
+  leadActivities    LeadActivity[]
 
   @@map("profiles")
 }
@@ -86,6 +88,7 @@ model Institution {
   invoices       Invoice[]
   payments       Payment[]
   leads          Lead[]
+  leadActivities LeadActivity[]
   templates      MessageTemplate[]
   messages       Message[]
   subjects       Subject[]
@@ -532,16 +535,53 @@ model Lead {
   stage                LeadStage  @default(NEW)
   nextFollowupAt       DateTime?
   lastNote             String?
+  assignedToId         String?
+  lostReason           String?
   convertedToStudentId String?
+  convertedAt          DateTime?
   createdAt            DateTime   @default(now())
   updatedAt            DateTime   @updatedAt
 
-  institution      Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
-  convertedStudent Student?    @relation("ConvertedStudent", fields: [convertedToStudentId], references: [id])
+  institution      Institution    @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  convertedStudent Student?       @relation("ConvertedStudent", fields: [convertedToStudentId], references: [id])
+  assignedTo       Profile?       @relation("LeadOwner", fields: [assignedToId], references: [id], onDelete: SetNull)
+  activities       LeadActivity[]
 
   @@index([institutionId, stage, nextFollowupAt])
   @@index([institutionId, phone])
+  @@index([institutionId, assignedToId, nextFollowupAt])
   @@map("leads")
+}
+
+model LeadActivity {
+  id            String           @id @default(cuid())
+  institutionId String
+  leadId        String
+  actorUserId   String
+  kind          LeadActivityKind
+  note          String?
+  meta          Json?
+  createdAt     DateTime         @default(now())
+
+  institution Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  lead        Lead        @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  actor       Profile     @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([institutionId, leadId, createdAt])
+  @@index([institutionId, actorUserId, createdAt])
+  @@map("lead_activities")
+}
+
+enum LeadActivityKind {
+  CREATED
+  NOTE
+  CALL
+  WHATSAPP
+  STAGE_CHANGED
+  FOLLOWUP_CHANGED
+  OWNER_CHANGED
+  CONVERTED
+  LINKED_EXISTING
 }
 
 enum LeadSource {
