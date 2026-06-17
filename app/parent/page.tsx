@@ -129,7 +129,7 @@ export default async function ParentDashboard() {
       </header>
 
       <main className="max-w-2xl mx-auto p-4 -mt-6 space-y-4 pb-16">
-        {children.length > 1 && <ChildSwitcher children={children} selectedId={child.id} />}
+        {children.length > 1 && <ChildSwitcher childOptions={children} selectedId={child.id} />}
 
         <section className="grid grid-cols-2 gap-3">
           <Card className="p-4 text-center">

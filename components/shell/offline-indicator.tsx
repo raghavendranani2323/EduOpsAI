@@ -7,12 +7,11 @@ import { usePendingMutationCount } from "@/lib/offline/use-pending-mutations";
 
 export function OfflineIndicator() {
   const { t } = useI18n();
-  const [offline, setOffline] = useState(false);
+  const [offline, setOffline] = useState(() => typeof navigator !== "undefined" && !navigator.onLine);
   const pending = usePendingMutationCount();
 
   useEffect(() => {
     if (typeof navigator === "undefined") return;
-    setOffline(!navigator.onLine);
     const on  = () => setOffline(false);
     const off = () => setOffline(true);
     window.addEventListener("online", on);
