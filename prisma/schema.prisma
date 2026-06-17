@@ -131,6 +131,10 @@ model Invitation {
   id            String    @id @default(cuid())
   institutionId String
   email         String
+  fullName      String?
+  phone         String?
+  designation   String?
+  qualification String?
   role          Role      @default(TEACHER)
   token         String    @unique @default(cuid())
   expiresAt     DateTime

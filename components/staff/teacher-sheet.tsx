@@ -4,13 +4,11 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
-  AlertTriangle, Check, Copy, KeyRound, MessageCircle, Pencil, Phone,
-  ShieldCheck, UserPlus, BookOpen,
+  AlertTriangle, KeyRound, MessageCircle, Pencil, Phone, UserPlus, BookOpen,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetBody, SheetFooter } from "@/components/ui/sheet";
-import { cn } from "@/lib/utils";
 
 export interface TeacherProfile {
   id: string; fullName: string;
@@ -19,14 +17,6 @@ export interface TeacherProfile {
 }
 
 export interface StaffOption { id: string; fullName: string; role: string }
-
-interface Credentials {
-  mode: "email" | "phone";
-  identifier: string;
-  password: string;
-  loginUrl: string;
-  whatsappShare: string;
-}
 
 interface Props {
   open: boolean;
@@ -54,8 +44,6 @@ export function TeacherSheet({
   const [saving, setSaving] = useState(false);
   const [confirmingReset, setConfirmingReset] = useState(false);
   const [resetting, setResetting] = useState(false);
-  const [credentials, setCredentials] = useState<Credentials | null>(null);
-  const [copied, setCopied] = useState<string | null>(null);
   const [form, setForm] = useState({ fullName: "", phone: "", email: "", designation: "", qualification: "" });
 
   const canReset = teacherRole === "TEACHER";
@@ -98,27 +86,17 @@ export function TeacherSheet({
       const res = await fetch(`/api/staff/${teacher.id}/reset-password`, { method: "POST" });
       const result = await res.json();
       if (!result.ok) { toast.error(result.error); return; }
-      setCredentials(result.credentials);
       setConfirmingReset(false);
-      toast.success("New password set");
+      toast.success(result.message ?? "Password recovery started");
     } finally {
       setResetting(false);
     }
   }
 
-  function copy(text: string, field: string) {
-    navigator.clipboard.writeText(text).then(() => {
-      setCopied(field);
-      setTimeout(() => setCopied(null), 1500);
-    });
-  }
-
   function close(v: boolean) {
-    if (!v) { setEditing(false); setCredentials(null); setConfirmingReset(false); }
+    if (!v) { setEditing(false); setConfirmingReset(false); }
     onOpenChange(v);
   }
-
-  const waTarget = teacher?.phone?.replace(/\D/g, "") ?? "";
 
   return (
     <Sheet open={open} onOpenChange={close}>
@@ -209,46 +187,20 @@ export function TeacherSheet({
                   </div>
 
                   {/* Confirm before resetting — the old password stops working */}
-                  {confirmingReset && !credentials && (
+                  {confirmingReset && (
                     <div className="rounded-2xl border border-warning/40 bg-warning/10 p-4 space-y-3 animate-fade-in">
                       <p className="text-sm font-semibold flex items-center gap-2">
-                        <AlertTriangle className="h-4 w-4 text-warning shrink-0" /> Set a new password?
+                        <AlertTriangle className="h-4 w-4 text-warning shrink-0" /> Start password recovery?
                       </p>
                       <p className="text-xs text-muted-foreground leading-relaxed">
-                        This creates a fresh password and the old one stops working immediately —
-                        across <strong>all</strong> classes {teacher.fullName.split(" ")[0]} handles
-                        (one login per teacher). Do this only if they lost their password or it&apos;s their first login.
+                        We will send a secure recovery email to the teacher. EduOps will not show or share a password here.
                       </p>
                       <div className="grid grid-cols-2 gap-2">
                         <Button size="sm" variant="outline" onClick={() => setConfirmingReset(false)} disabled={resetting}>Cancel</Button>
                         <Button size="sm" onClick={resetPassword} disabled={resetting}>
-                          {resetting ? "Setting…" : "Yes, set new password"}
+                          {resetting ? "Sending..." : "Send recovery email"}
                         </Button>
                       </div>
-                    </div>
-                  )}
-
-                  {credentials && (
-                    <div className="rounded-2xl border border-primary/25 bg-primary/5 p-4 space-y-2.5 animate-fade-in">
-                      <p className="text-xs font-bold uppercase tracking-wider text-primary flex items-center gap-1.5">
-                        <ShieldCheck className="h-3.5 w-3.5" /> New login credentials
-                      </p>
-                      <CredRow label={credentials.mode === "email" ? "Email" : "Phone"} value={credentials.identifier} copied={copied === "id"} onCopy={() => copy(credentials.identifier, "id")} />
-                      <CredRow label="Password" value={credentials.password} copied={copied === "pw"} onCopy={() => copy(credentials.password, "pw")} mono />
-                      <CredRow label="Login at" value={credentials.loginUrl} copied={copied === "url"} onCopy={() => copy(credentials.loginUrl, "url")} />
-                      <div className="grid grid-cols-2 gap-2 pt-1">
-                        <Button size="sm" variant="outline" onClick={() => copy(credentials.whatsappShare, "all")}>
-                          {copied === "all" ? <Check /> : <Copy />} Copy all
-                        </Button>
-                        <a
-                          href={`https://wa.me/${waTarget}?text=${encodeURIComponent(credentials.whatsappShare)}`}
-                          target="_blank" rel="noopener noreferrer"
-                          className="inline-flex items-center justify-center gap-1.5 rounded-full bg-[var(--success)] text-white text-xs font-bold py-2.5 active:scale-[0.97] transition-transform"
-                        >
-                          <MessageCircle className="h-3.5 w-3.5" /> Send on WhatsApp
-                        </a>
-                      </div>
-                      <p className="text-[11px] text-muted-foreground">Saved to the teacher&apos;s account already. Shown only once — share it now.</p>
                     </div>
                   )}
 
@@ -290,18 +242,6 @@ export function TeacherSheet({
         </SheetFooter>
       </SheetContent>
     </Sheet>
-  );
-}
-
-function CredRow({ label, value, copied, onCopy, mono }: { label: string; value: string; copied: boolean; onCopy: () => void; mono?: boolean }) {
-  return (
-    <div className="flex items-center gap-2">
-      <span className="text-[11px] font-semibold text-muted-foreground w-16 shrink-0">{label}</span>
-      <span className={cn("text-sm font-medium flex-1 truncate", mono && "font-mono tracking-wide")}>{value}</span>
-      <button onClick={onCopy} className="tap h-8 w-8 rounded-lg flex items-center justify-center hover:bg-muted shrink-0" aria-label={`Copy ${label}`}>
-        {copied ? <Check className="h-3.5 w-3.5 text-primary" /> : <Copy className="h-3.5 w-3.5 text-muted-foreground" />}
-      </button>
-    </div>
   );
 }
 

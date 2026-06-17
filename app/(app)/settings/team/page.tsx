@@ -2,7 +2,6 @@ import { requireInstitution } from "@/lib/tenant/current";
 import { withRls } from "@/lib/prisma/rls";
 import { TeamPageClient } from "./team-client";
 import { Prisma } from "@prisma/client";
-import type { Invitation } from "@prisma/client";
 
 type MemberWithUser = Prisma.MembershipGetPayload<{
   include: { user: { select: { id: true; fullName: true } } };
@@ -10,6 +9,7 @@ type MemberWithUser = Prisma.MembershipGetPayload<{
 
 export default async function TeamPage() {
   const { user, institution, membership } = await requireInstitution();
+  const canInvite = ["OWNER", "ADMIN"].includes(membership.role);
 
   const [members, invitations] = await withRls(user.id, (tx) =>
     Promise.all([
@@ -18,14 +18,15 @@ export default async function TeamPage() {
         include: { user: { select: { id: true, fullName: true } } },
         orderBy: { createdAt: "asc" },
       }),
-      tx.invitation.findMany({
-        where: { institutionId: institution.id, acceptedAt: null },
-        orderBy: { createdAt: "desc" },
-      }),
+      canInvite
+        ? tx.invitation.findMany({
+            where: { institutionId: institution.id, acceptedAt: null, expiresAt: { gt: new Date() } },
+            orderBy: { createdAt: "desc" },
+            select: { id: true, email: true, role: true, expiresAt: true },
+          })
+        : Promise.resolve([]),
     ])
   );
-
-  const canInvite = ["OWNER", "ADMIN"].includes(membership.role);
 
   return (
     <TeamPageClient
@@ -38,12 +39,11 @@ export default async function TeamPage() {
         fullName: m.user.fullName,
         role: m.role,
       }))}
-      invitations={invitations.map((i: Invitation) => ({
+      invitations={invitations.map((i) => ({
         id: i.id,
         email: i.email,
         role: i.role,
         expiresAt: i.expiresAt.toISOString(),
-        token: i.token,
       }))}
     />
   );
