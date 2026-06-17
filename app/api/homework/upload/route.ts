@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireInstitution } from "@/lib/tenant/current";
+import { requireApiInstitution } from "@/lib/api/auth";
 import { withRls } from "@/lib/prisma/rls";
 import { getTeacherClassIds } from "@/lib/tenant/teacher-scope";
 import { ApiError, errorResponse, serverErrorResponse } from "@/lib/api/errors";
@@ -18,7 +18,7 @@ const classIdSchema = z.string().min(1).max(191);
 export async function POST(req: Request) {
   let audit: { actorUserId: string; institutionId: string; classId?: string | null } | null = null;
   try {
-    const { user, institution, membership } = await requireInstitution();
+    const { user, institution, membership } = await requireApiInstitution();
 
     const form = await req.formData();
     const parsedClassId = classIdSchema.safeParse(form.get("classId"));

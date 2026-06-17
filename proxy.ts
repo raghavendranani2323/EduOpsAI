@@ -33,12 +33,16 @@ export async function proxy(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
   const isAuthRoute = pathname.startsWith("/login") || pathname.startsWith("/signup") || pathname.startsWith("/accept-invite") || pathname.startsWith("/teacher-login");
+  const isApiRoute = pathname.startsWith("/api/");
+  const isPublicApi =
+    pathname.startsWith("/api/auth") ||
+    pathname.startsWith("/api/razorpay") ||
+    pathname === "/api/push/send" ||
+    pathname.startsWith("/api/parent");
   const isPublicRoute =
     isAuthRoute ||
     pathname === "/" ||
-    pathname.startsWith("/api/razorpay") ||
-    pathname.startsWith("/api/auth") ||
-    pathname === "/api/push/send" ||
+    isPublicApi ||
     pathname.startsWith("/onboarding") ||
     pathname.startsWith("/p/") ||
     pathname.startsWith("/api/p/") ||
@@ -47,6 +51,13 @@ export async function proxy(request: NextRequest) {
     pathname === "/manifest.json" ||
     pathname === "/sw.js" ||
     pathname === "/offline.html";
+
+  if (!user && isApiRoute && !isPublicApi) {
+    return NextResponse.json(
+      { ok: false, error: "Please sign in to continue", code: "AUTH_REQUIRED" },
+      { status: 401 },
+    );
+  }
 
   if (!user && !isPublicRoute) {
     const url = request.nextUrl.clone();

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireInstitution } from "@/lib/tenant/current";
+import { requireApiInstitution } from "@/lib/api/auth";
 import { withRls } from "@/lib/prisma/rls";
 import { whatsappLink } from "@/lib/format/phone";
 import { formatDateLong } from "@/lib/format/date";
@@ -26,7 +26,7 @@ export async function GET(req: Request) {
     | { actorUserId: string; institutionId: string; classId?: string | null; date?: string | null }
     | null = null;
   try {
-    const { user, institution, membership } = await requireInstitution();
+    const { user, institution, membership } = await requireApiInstitution();
     const { searchParams } = new URL(req.url);
     const classId = searchParams.get("classId");
     const date    = searchParams.get("date");
@@ -73,7 +73,7 @@ export async function POST(req: Request) {
     | { actorUserId: string; institutionId: string; classId?: string | null; date?: string | null }
     | null = null;
   try {
-    const { user, institution, membership } = await requireInstitution();
+    const { user, institution, membership } = await requireApiInstitution();
     const parsed = attendanceSchema.safeParse(await req.json());
     if (!parsed.success) {
       return NextResponse.json({ ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });

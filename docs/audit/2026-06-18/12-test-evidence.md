@@ -221,3 +221,32 @@ Legal conclusions were not made. Compliance items are recommendations requiring 
 - Database RLS migration execution and rollback were not performed.
 - Supabase private-bucket policy, signed URL expiry, and cross-tenant object access were not tested against a live project.
 - A push provider send was not performed.
+
+## Phase 0 Remediation Verification - 18/06/2026
+
+| Command | Result |
+|---|---|
+| `pnpm test:phase1` | Passed. |
+| `pnpm test:migrations` | Static SQL verification passed. Live policy/column verification skipped because `RLS_TEST_SUPERUSER_URL` is not configured. |
+| `pnpm typecheck` | Passed. |
+| `pnpm lint` | Passed with 0 errors and 18 existing warnings. |
+| `pnpm build` | Passed; Next.js 16.2.7 generated 69 routes. |
+| `pnpm test:rls` | Blocked as designed because dedicated test database URLs are not configured. |
+| `pnpm audit --audit-level moderate` | Failed with 8 advisories: 1 high, 6 moderate, 1 low. |
+
+Production-mode HTTP probes on local port 3100:
+
+- Anonymous `GET /api/attendance`: JSON `401 AUTH_REQUIRED`.
+- Anonymous `POST /api/homework/upload`: JSON `401 AUTH_REQUIRED`.
+- Unconfigured `POST /api/push/send`: JSON `503 PUSH_SEND_NOT_CONFIGURED`.
+
+Migration conclusion:
+
+- The repository uses manually applied phase SQL files, not Prisma migration
+  history. `prisma migrate deploy` does not discover the current files.
+- Converting historical files directly into Prisma migration directories is
+  unsafe without first baselining the populated database.
+- `prisma/migrations/README.md` now documents the convention and staged
+  verification requirement. `pnpm test:migrations` validates Phase 1 SQL
+  statically and checks live columns, policies, and RLS when a dedicated
+  database URL is supplied.
