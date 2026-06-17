@@ -1,26 +1,46 @@
 import { NextResponse } from "next/server";
-import { requireInstitution } from "@/lib/tenant/current";
+import { z } from "zod";
+import { requireApiInstitution } from "@/lib/api/auth";
 import { withRls } from "@/lib/prisma/rls";
+import { ApiError, errorResponse, serverErrorResponse } from "@/lib/api/errors";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
+import { requestIdFrom } from "@/lib/observability/request";
+import { logServer } from "@/lib/observability/logger";
+import { writeAuditEvent } from "@/lib/audit/server";
 
-interface ImportRow {
-  fullName:      string;
-  admissionNo?:  string;
-  gender?:       string;
-  classId?:      string;
-  guardianName?: string;
-  guardianPhone?: string;
-}
+const importSchema = z.object({
+  students: z.array(z.object({
+    fullName: z.string().trim().min(1).max(200),
+    admissionNo: z.string().trim().max(100).optional(),
+    gender: z.enum(["MALE", "FEMALE", "OTHER"]).optional(),
+    classId: z.string().max(191).optional(),
+    guardianName: z.string().trim().max(200).optional(),
+    guardianPhone: z.string().trim().max(20).optional(),
+  })).min(1).max(500),
+});
 
 export async function POST(req: Request) {
+  const requestId = requestIdFrom(req);
+  let audit: { userId: string; institutionId: string } | null = null;
   try {
-    const { user, institution } = await requireInstitution();
-    const { students } = await req.json() as { students: ImportRow[] };
-
-    if (!Array.isArray(students) || students.length === 0) {
-      return NextResponse.json({ ok: false, error: "No students provided" }, { status: 400 });
+    const { user, institution, membership } = await requireApiInstitution();
+    audit = { userId: user.id, institutionId: institution.id };
+    if (!["OWNER", "ADMIN"].includes(membership.role)) {
+      throw new ApiError(403, "STUDENT_IMPORT_FORBIDDEN", "Only owners and admins can import students");
     }
+    await enforceRateLimit({
+      scope: "student-import",
+      subject: `${institution.id}:${user.id}`,
+      limit: 10,
+      windowSeconds: 60 * 60,
+    });
+    const parsed = importSchema.safeParse(await req.json().catch(() => null));
+    if (!parsed.success) {
+      throw new ApiError(400, "INVALID_IMPORT", parsed.error.issues[0]?.message ?? "Invalid import");
+    }
+    const { students } = parsed.data;
 
-    const rows = students.slice(0, 500).filter(s => s.fullName?.trim());
+    const rows = students;
     let imported = 0;
     let errors   = 0;
 
@@ -56,8 +76,17 @@ export async function POST(req: Request) {
       }
     }
 
+    await writeAuditEvent({
+      actorUserId: user.id,
+      institutionId: institution.id,
+      action: "students.import",
+      outcome: errors ? "failure" : "success",
+      meta: { requested: rows.length, imported, errors },
+    });
     return NextResponse.json({ ok: true, imported, errors });
-  } catch {
-    return NextResponse.json({ ok: false, error: "Unauthorised" }, { status: 401 });
+  } catch (err) {
+    if (err instanceof ApiError) return errorResponse(err, { requestId });
+    logServer("error", "students.import.failed", { requestId, error: err, ...audit });
+    return serverErrorResponse("Failed to import students", { requestId });
   }
 }

@@ -3,10 +3,12 @@ import { Client } from "pg";
 
 const attendancePath = "prisma/migrations/phase4_attendance_integrity.sql";
 const invitationsPath = "prisma/migrations/phase4_secure_staff_invitations.sql";
+const foundationsPath = "prisma/migrations/phase5_api_foundations.sql";
 
-const [attendanceSql, invitationsSql] = await Promise.all([
+const [attendanceSql, invitationsSql, foundationsSql] = await Promise.all([
   readFile(attendancePath, "utf8"),
   readFile(invitationsPath, "utf8"),
+  readFile(foundationsPath, "utf8"),
 ]);
 
 const requiredAttendancePolicies = [
@@ -26,6 +28,9 @@ for (const column of ['"fullName"', "phone", "designation", "qualification"]) {
   if (!invitationsSql.includes(column)) {
     throw new Error(`${invitationsPath} is missing ${column}`);
   }
+}
+if (!foundationsSql.includes("CREATE TABLE IF NOT EXISTS rate_limit_counters")) {
+  throw new Error(`${foundationsPath} is missing rate_limit_counters`);
 }
 
 const url = process.env.RLS_TEST_SUPERUSER_URL;
@@ -69,7 +74,16 @@ try {
     throw new Error("Attendance RLS is not enabled");
   }
 
-  console.log("Phase 1 migrations are present and RLS remains enabled.");
+  const rateLimitTable = await db.query(`
+    SELECT relrowsecurity
+    FROM pg_class
+    WHERE relname = 'rate_limit_counters'
+  `);
+  if (rateLimitTable.rowCount !== 1 || !rateLimitTable.rows[0].relrowsecurity) {
+    throw new Error("Rate limit table is missing or RLS is not enabled");
+  }
+
+  console.log("Security migrations are present and RLS remains enabled.");
 } finally {
   await db.end();
 }

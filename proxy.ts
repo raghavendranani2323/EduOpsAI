@@ -1,8 +1,14 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { randomUUID } from "node:crypto";
 
 export async function proxy(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({ request });
+  const requestId = request.headers.get("x-request-id") ?? randomUUID();
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-request-id", requestId);
+  let supabaseResponse = NextResponse.next({
+    request: { headers: requestHeaders },
+  });
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -16,7 +22,9 @@ export async function proxy(request: NextRequest) {
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value)
           );
-          supabaseResponse = NextResponse.next({ request });
+          supabaseResponse = NextResponse.next({
+            request: { headers: requestHeaders },
+          });
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
           );
@@ -53,10 +61,12 @@ export async function proxy(request: NextRequest) {
     pathname === "/offline.html";
 
   if (!user && isApiRoute && !isPublicApi) {
-    return NextResponse.json(
+    const response = NextResponse.json(
       { ok: false, error: "Please sign in to continue", code: "AUTH_REQUIRED" },
       { status: 401 },
     );
+    response.headers.set("x-request-id", requestId);
+    return response;
   }
 
   if (!user && !isPublicRoute) {
@@ -71,6 +81,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  supabaseResponse.headers.set("x-request-id", requestId);
   return supabaseResponse;
 }
 

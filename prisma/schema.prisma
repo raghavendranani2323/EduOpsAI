@@ -836,3 +836,15 @@ model AuditLog {
   @@index([actorUserId])
   @@map("audit_logs")
 }
+
+model RateLimitCounter {
+  id        String   @id
+  scope     String
+  count     Int      @default(0)
+  resetAt   DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([resetAt])
+  @@map("rate_limit_counters")
+}

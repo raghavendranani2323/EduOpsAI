@@ -9,6 +9,8 @@ import { writeAuditEvent } from "@/lib/audit/server";
 import { requireAttendanceClassAccess } from "@/lib/attendance/access";
 import { parseAttendanceDate } from "@/lib/attendance/validation";
 import { replaceAttendanceRecords } from "@/lib/attendance/save";
+import { requestIdFrom } from "@/lib/observability/request";
+import { logServer } from "@/lib/observability/logger";
 
 const attendanceSchema = z.object({
   classId:      z.string().min(1),
@@ -22,6 +24,7 @@ const attendanceSchema = z.object({
 });
 
 export async function GET(req: Request) {
+  const requestId = requestIdFrom(req);
   let audit:
     | { actorUserId: string; institutionId: string; classId?: string | null; date?: string | null }
     | null = null;
@@ -62,13 +65,15 @@ export async function GET(req: Request) {
           meta: { code: err.code, date: audit.date },
         });
       }
-      return errorResponse(err);
+      return errorResponse(err, { requestId });
     }
-    return NextResponse.json({ ok: false, error: "Unauthorised", code: "UNAUTHORISED" }, { status: 401 });
+    logServer("error", "attendance.read.failed", { requestId, error: err });
+    return serverErrorResponse("Failed to load attendance", { requestId });
   }
 }
 
 export async function POST(req: Request) {
+  const requestId = requestIdFrom(req);
   let audit:
     | { actorUserId: string; institutionId: string; classId?: string | null; date?: string | null }
     | null = null;
@@ -159,9 +164,9 @@ export async function POST(req: Request) {
           meta: { code: err.code, date: audit.date },
         });
       }
-      return errorResponse(err);
+      return errorResponse(err, { requestId });
     }
-    console.error("[attendance] save failed", err instanceof Error ? err.message : err);
+    logServer("error", "attendance.save.failed", { requestId, error: err, ...audit });
     if (audit) {
       await writeAuditEvent({
         actorUserId: audit.actorUserId,
@@ -172,6 +177,6 @@ export async function POST(req: Request) {
         meta: { date: audit.date },
       });
     }
-    return serverErrorResponse("Failed to save attendance");
+    return serverErrorResponse("Failed to save attendance", { requestId });
   }
 }

@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
-import { requireInstitution } from "@/lib/tenant/current";
+import { requireApiInstitution } from "@/lib/api/auth";
 import { withRls } from "@/lib/prisma/rls";
 import { csvResponse } from "@/lib/export/csv";
 import { writeAuditEvent } from "@/lib/audit/server";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
+import { ApiError, errorResponse } from "@/lib/api/errors";
 
 export async function GET(req: Request) {
-  const { user, institution, membership } = await requireInstitution();
+  const { user, institution, membership } = await requireApiInstitution();
   if (!["OWNER", "ADMIN", "ACCOUNTANT"].includes(membership.role)) {
     await writeAuditEvent({
       actorUserId: user.id,
@@ -15,6 +17,17 @@ export async function GET(req: Request) {
       meta: { role: membership.role },
     });
     return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
+  }
+  try {
+    await enforceRateLimit({
+      scope: "export-fees",
+      subject: `${institution.id}:${user.id}`,
+      limit: 10,
+      windowSeconds: 60 * 60,
+    });
+  } catch (err) {
+    if (err instanceof ApiError) return errorResponse(err);
+    throw err;
   }
 
   const { searchParams } = new URL(req.url);

@@ -250,3 +250,37 @@ Migration conclusion:
   verification requirement. `pnpm test:migrations` validates Phase 1 SQL
   statically and checks live columns, policies, and RLS when a dedicated
   database URL is supplied.
+
+## Phase 1 Shared API Foundations - 18/06/2026
+
+Implemented and locally verified:
+
+- Stable safe error envelopes with machine code, safe message, request ID, and
+  `Retry-After` support.
+- Request IDs propagated through Proxy request/response headers.
+- Structured JSON logs with secret and common PII redaction.
+- Postgres-backed rate limits for parent OTP, staff invitations, imports,
+  exports, push, communication sends, fee reminders, and homework uploads.
+- Security headers: CSP, frame protection, nosniff, referrer policy,
+  permissions policy, and production HSTS.
+- Safe provider errors for parent OTP and communication/reminder routes touched
+  in this phase.
+
+Validation:
+
+| Command | Result |
+|---|---|
+| `pnpm test:api-foundations` | Passed. |
+| `pnpm test:phase1` | Passed after foundation changes. |
+| `pnpm test:migrations` | Static verification passed; live verification blocked by missing dedicated database URL. |
+| `pnpm typecheck` | Passed. |
+| `pnpm lint` | Passed with 0 errors and 18 existing warnings. |
+| `pnpm build` | Passed; 69 routes generated. |
+
+Production HTTP verification confirmed `/login` returned all configured
+security headers plus `x-request-id`. Browser automation was unavailable
+because the local Playwright Chromium binary is not installed. No browser
+binary was downloaded during this remediation.
+
+Manual action: apply `prisma/migrations/phase5_api_foundations.sql` to staging
+before testing rate-limited endpoints.

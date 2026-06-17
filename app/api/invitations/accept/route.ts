@@ -4,11 +4,15 @@ import { ApiError, errorResponse, serverErrorResponse } from "@/lib/api/errors";
 import { writeAuditEvent } from "@/lib/audit/server";
 import { prismaAdmin as prisma } from "@/lib/prisma/admin";
 import { createClient } from "@/lib/supabase/server";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
+import { requestIdFrom } from "@/lib/observability/request";
+import { logServer } from "@/lib/observability/logger";
 
 const schema = z.object({ token: z.string().min(32).max(256) });
 const ROLE_RANK: Record<string, number> = { OWNER: 4, ADMIN: 3, ACCOUNTANT: 2, TEACHER: 1 };
 
 export async function POST(req: NextRequest) {
+  const requestId = requestIdFrom(req);
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
@@ -18,6 +22,12 @@ export async function POST(req: NextRequest) {
   let institutionId: string | null = null;
   let invitationId: string | null = null;
   try {
+    await enforceRateLimit({
+      scope: "staff-invite-accept",
+      subject: user.id,
+      limit: 20,
+      windowSeconds: 60 * 60,
+    });
     const parsed = schema.safeParse(await req.json().catch(() => null));
     if (!parsed.success) {
       throw new ApiError(400, "INVALID_INVITATION", "Invalid invitation");
@@ -129,9 +139,9 @@ export async function POST(req: NextRequest) {
           meta: { code: err.code },
         });
       }
-      return errorResponse(err);
+      return errorResponse(err, { requestId });
     }
-    console.error("[invitations/accept] failed", err instanceof Error ? err.message : err);
-    return serverErrorResponse("Failed to accept invitation");
+    logServer("error", "staff.invite.accept_failed", { requestId, error: err, institutionId });
+    return serverErrorResponse("Failed to accept invitation", { requestId });
   }
 }

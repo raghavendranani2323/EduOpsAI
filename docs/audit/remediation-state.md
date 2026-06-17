@@ -10,7 +10,8 @@ Updated: 18/06/2026
 
 ## Current Phase
 
-Phase 0 - locally complete, live verification blocked.
+Phase 1 - shared API, authorisation, and audit foundations locally complete;
+live database verification pending.
 
 ## Completed
 
@@ -21,6 +22,13 @@ Phase 0 - locally complete, live verification blocked.
   responses instead of redirecting to an HTML login page.
 - Phase 1 SQL files have a documented repository convention and a static/live
   verification command.
+- Stable API error envelopes support request IDs and `Retry-After`.
+- Proxy-generated request IDs are propagated to request and response headers.
+- Structured logging redacts credentials, tokens, signed URLs, and common PII.
+- Durable Postgres rate limits cover parent OTP, invitations, imports, exports,
+  push, communications, fee reminders, and homework uploads.
+- Production security headers include CSP, frame protection, nosniff,
+  referrer policy, permissions policy, and HSTS.
 
 ## Partial Or Blocked
 
@@ -40,6 +48,7 @@ Phase 0 - locally complete, live verification blocked.
 ## Tests Last Run
 
 - `pnpm test:phase1`: passed.
+- `pnpm test:api-foundations`: passed.
 - `pnpm test:migrations`: static verification passed; live verification
   skipped because `RLS_TEST_SUPERUSER_URL` is unavailable.
 - `pnpm typecheck`: passed.
@@ -51,6 +60,9 @@ Phase 0 - locally complete, live verification blocked.
   - anonymous attendance API: JSON `401`
   - anonymous homework upload API: JSON `401`
   - unconfigured push send API: JSON `503`
+  - `/login` response included the configured security headers and request ID.
+  - Browser automation could not run because the local Playwright Chromium
+    executable is unavailable; HTTP and production build checks completed.
 
 ## Known Failures
 
@@ -66,6 +78,6 @@ Phase 0 - locally complete, live verification blocked.
 
 ## Resume
 
-Continue with Phase 1 shared API, authorisation, rate-limit, security-header,
-and audit foundations. Re-run live Phase 0 checks when staging credentials are
-available.
+Continue with Phase 2 role and tenant permission matrix. Apply
+`phase5_api_foundations.sql` before exercising rate-limited routes in staging.
+Re-run live Phase 0/1 checks when staging credentials are available.

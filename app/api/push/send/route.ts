@@ -9,8 +9,12 @@ import {
   pushSendSchema,
   validatePushUrl,
 } from "@/lib/push/send-security";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
+import { requestIdFrom } from "@/lib/observability/request";
+import { logServer } from "@/lib/observability/logger";
 
 export async function POST(req: Request) {
+  const requestId = requestIdFrom(req);
   let audit: { institutionId?: string; purpose?: string } = {};
   try {
     assertPushSendToken(req);
@@ -25,16 +29,12 @@ export async function POST(req: Request) {
     audit = { institutionId: body.institutionId, purpose: body.purpose };
     const url = validatePushUrl(body.url);
 
-    const recentCount = await prismaAdmin.auditLog.count({
-      where: {
-        institutionId: body.institutionId,
-        action: "push.send",
-        createdAt: { gte: new Date(Date.now() - 60 * 60 * 1000) },
-      },
+    await enforceRateLimit({
+      scope: "push-send",
+      subject: body.institutionId,
+      limit: 60,
+      windowSeconds: 60 * 60,
     });
-    if (recentCount >= 60) {
-      throw new ApiError(429, "PUSH_RATE_LIMITED", "Too many push notifications. Try again later");
-    }
 
     const requestedUserIds = [...new Set(body.recipientUserIds)];
     const members = await prismaAdmin.membership.findMany({
@@ -100,7 +100,11 @@ export async function POST(req: Request) {
       } catch (err) {
         const code = (err as { statusCode?: number }).statusCode;
         if (code === 404 || code === 410) stale.push(s.endpoint);
-        else console.error("[push/send] provider failure", { code });
+        else logServer("warn", "push.send.provider_failed", {
+          requestId,
+          institutionId: body.institutionId,
+          providerStatus: code,
+        });
       }
     }));
 
@@ -126,9 +130,9 @@ export async function POST(req: Request) {
         outcome: err.status === 401 || err.status === 403 ? "denied" : "failure",
         meta: { code: err.code, purpose: audit.purpose },
       });
-      return errorResponse(err);
+      return errorResponse(err, { requestId });
     }
-    console.error("[push/send] failed", err instanceof Error ? err.message : err);
+    logServer("error", "push.send.failed", { requestId, error: err, ...audit });
     await writeAuditEvent({
       actorUserId: "system:push",
       institutionId: audit.institutionId ?? null,
@@ -136,6 +140,6 @@ export async function POST(req: Request) {
       outcome: "failure",
       meta: { purpose: audit.purpose },
     });
-    return serverErrorResponse("Failed to send push notification");
+    return serverErrorResponse("Failed to send push notification", { requestId });
   }
 }

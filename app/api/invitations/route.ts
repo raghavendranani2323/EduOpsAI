@@ -4,7 +4,10 @@ import { z } from "zod";
 import { ApiError, errorResponse, serverErrorResponse } from "@/lib/api/errors";
 import { writeAuditEvent } from "@/lib/audit/server";
 import { withRls } from "@/lib/prisma/rls";
-import { requireInstitution } from "@/lib/tenant/current";
+import { requireApiInstitution } from "@/lib/api/auth";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
+import { requestIdFrom } from "@/lib/observability/request";
+import { logServer } from "@/lib/observability/logger";
 
 const schema = z.object({
   email: z.string().email(),
@@ -16,8 +19,15 @@ function inviteToken() {
 }
 
 export async function POST(req: NextRequest) {
+  const requestId = requestIdFrom(req);
   try {
-    const { user, institution, membership } = await requireInstitution();
+    const { user, institution, membership } = await requireApiInstitution();
+    await enforceRateLimit({
+      scope: "staff-invite",
+      subject: `${institution.id}:${user.id}`,
+      limit: 20,
+      windowSeconds: 60 * 60,
+    });
     if (!["OWNER", "ADMIN"].includes(membership.role)) {
       await writeAuditEvent({
         actorUserId: user.id,
@@ -80,15 +90,15 @@ export async function POST(req: NextRequest) {
       inviteUrl,
     });
   } catch (err) {
-    if (err instanceof ApiError) return errorResponse(err);
-    console.error("[invitations] create failed", err instanceof Error ? err.message : err);
-    return serverErrorResponse("Failed to create invitation");
+    if (err instanceof ApiError) return errorResponse(err, { requestId });
+    logServer("error", "staff.invite.failed", { requestId, error: err });
+    return serverErrorResponse("Failed to create invitation", { requestId });
   }
 }
 
 export async function GET() {
   try {
-    const { user, institution, membership } = await requireInstitution();
+    const { user, institution, membership } = await requireApiInstitution();
     if (!["OWNER", "ADMIN"].includes(membership.role)) {
       throw new ApiError(403, "INVITATION_LIST_FORBIDDEN", "Only owners and admins can view invitations");
     }
@@ -109,7 +119,7 @@ export async function GET() {
 
 export async function DELETE(req: NextRequest) {
   try {
-    const { user, institution, membership } = await requireInstitution();
+    const { user, institution, membership } = await requireApiInstitution();
     if (!["OWNER", "ADMIN"].includes(membership.role)) {
       throw new ApiError(403, "INVITATION_REVOKE_FORBIDDEN", "Only owners and admins can revoke invitations");
     }

@@ -12,13 +12,23 @@ import {
   HOMEWORK_BUCKET,
   validateHomeworkFile,
 } from "@/lib/homework/attachments";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
+import { requestIdFrom } from "@/lib/observability/request";
+import { logServer } from "@/lib/observability/logger";
 
 const classIdSchema = z.string().min(1).max(191);
 
 export async function POST(req: Request) {
+  const requestId = requestIdFrom(req);
   let audit: { actorUserId: string; institutionId: string; classId?: string | null } | null = null;
   try {
     const { user, institution, membership } = await requireApiInstitution();
+    await enforceRateLimit({
+      scope: "homework-upload",
+      subject: `${institution.id}:${user.id}`,
+      limit: 30,
+      windowSeconds: 60 * 60,
+    });
 
     const form = await req.formData();
     const parsedClassId = classIdSchema.safeParse(form.get("classId"));
@@ -52,7 +62,12 @@ export async function POST(req: Request) {
       upsert: false,
     });
     if (error) {
-      console.error("[homework/upload] storage failure", error.message);
+      logServer("error", "homework.upload.storage_failed", {
+        requestId,
+        institutionId: institution.id,
+        actorUserId: user.id,
+        providerCode: error.name,
+      });
       throw new ApiError(500, "STORAGE_UPLOAD_FAILED", "Could not upload homework file");
     }
     const signedUrl = await createHomeworkSignedUrl(key);
@@ -78,9 +93,9 @@ export async function POST(req: Request) {
           meta: { code: err.code },
         });
       }
-      return errorResponse(err);
+      return errorResponse(err, { requestId });
     }
-    console.error("[homework/upload] failed", err instanceof Error ? err.message : err);
-    return serverErrorResponse("Failed to upload homework file");
+    logServer("error", "homework.upload.failed", { requestId, error: err, ...audit });
+    return serverErrorResponse("Failed to upload homework file", { requestId });
   }
 }
