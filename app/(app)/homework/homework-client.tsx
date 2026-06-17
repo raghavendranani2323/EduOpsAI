@@ -36,6 +36,7 @@ interface HomeworkRow {
   dueDate: string | null;
   createdAt: string;
   attachmentUrl: string | null;
+  attachmentObjectKey?: string | null;
   attachmentMime: string | null;
 }
 
@@ -59,7 +60,7 @@ export function HomeworkClient({ homework: initial, classes, subjects, scopedToT
   const [homework, setHomework] = useState(initial);
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [attachment, setAttachment] = useState<{ url: string; mime: string } | null>(null);
+  const [attachment, setAttachment] = useState<{ objectKey: string; url: string | null; mime: string } | null>(null);
   const [uploading, setUploading] = useState(false);
   const cameraRef = useRef<HTMLInputElement>(null);
   const fileRef   = useRef<HTMLInputElement>(null);
@@ -83,10 +84,11 @@ export function HomeworkClient({ homework: initial, classes, subjects, scopedToT
     try {
       const form = new FormData();
       form.append("file", file);
+      form.append("classId", selectedClassId);
       const res = await fetch("/api/homework/upload", { method: "POST", body: form });
       const result = await res.json();
       if (!result.ok) { toast.error(result.error ?? "Upload failed"); return; }
-      setAttachment({ url: result.url, mime: result.mime });
+      setAttachment({ objectKey: result.objectKey, url: result.signedUrl, mime: result.mime });
       toast.success("Attachment added");
     } finally {
       setUploading(false);
@@ -103,7 +105,7 @@ export function HomeworkClient({ homework: initial, classes, subjects, scopedToT
           ...data,
           subjectId: data.subjectId || null,
           dueDate: data.dueDate || null,
-          attachmentUrl: attachment?.url ?? null,
+          attachmentUrl: attachment?.objectKey ?? null,
           attachmentMime: attachment?.mime ?? null,
         }),
       });
@@ -118,7 +120,8 @@ export function HomeworkClient({ homework: initial, classes, subjects, scopedToT
         description: result.homework.description,
         dueDate: result.homework.dueDate?.split("T")[0] ?? null,
         createdAt: result.homework.createdAt,
-        attachmentUrl: result.homework.attachmentUrl ?? null,
+        attachmentUrl: attachment?.url ?? null,
+        attachmentObjectKey: result.homework.attachmentUrl ?? null,
         attachmentMime: result.homework.attachmentMime ?? null,
       };
       setHomework(prev => [newRow, ...prev]);
@@ -242,13 +245,13 @@ export function HomeworkClient({ homework: initial, classes, subjects, scopedToT
 
               {attachment && (
                 <div className="rounded-2xl border border-border p-2 bg-muted/30 relative">
-                  {attachment.mime.startsWith("image/") ? (
+                  {attachment.url && attachment.mime.startsWith("image/") ? (
                     /* eslint-disable-next-line @next/next/no-img-element */
                     <img src={attachment.url} alt="" className="w-full max-h-56 object-contain rounded-xl" />
                   ) : (
                     <div className="flex items-center gap-2 p-3">
                       <FileText className="h-5 w-5 text-muted-foreground" />
-                      <span className="text-xs truncate">{attachment.url.split("/").pop()}</span>
+                      <span className="text-xs truncate">{attachment.objectKey.split("/").pop()}</span>
                     </div>
                   )}
                   <button

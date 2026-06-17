@@ -1,46 +1,86 @@
 import { NextResponse } from "next/server";
-import { createClient as createServiceClient } from "@supabase/supabase-js";
+import { z } from "zod";
 import { requireInstitution } from "@/lib/tenant/current";
+import { withRls } from "@/lib/prisma/rls";
+import { getTeacherClassIds } from "@/lib/tenant/teacher-scope";
+import { ApiError, errorResponse, serverErrorResponse } from "@/lib/api/errors";
+import { writeAuditEvent } from "@/lib/audit/server";
+import {
+  buildHomeworkObjectKey,
+  createHomeworkSignedUrl,
+  getHomeworkStorageClient,
+  HOMEWORK_BUCKET,
+  validateHomeworkFile,
+} from "@/lib/homework/attachments";
 
-const ALLOWED = new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]);
-const MAX_BYTES = 5 * 1024 * 1024;
+const classIdSchema = z.string().min(1).max(191);
 
 export async function POST(req: Request) {
+  let audit: { actorUserId: string; institutionId: string; classId?: string | null } | null = null;
   try {
-    const { user, institution } = await requireInstitution();
-
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const serviceKey  = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!supabaseUrl || !serviceKey) {
-      return NextResponse.json({ ok: false, error: "Storage not configured" }, { status: 500 });
-    }
+    const { user, institution, membership } = await requireInstitution();
 
     const form = await req.formData();
+    const parsedClassId = classIdSchema.safeParse(form.get("classId"));
+    const classId = parsedClassId.success ? parsedClassId.data : "";
+    audit = { actorUserId: user.id, institutionId: institution.id, classId };
+    if (!parsedClassId.success) {
+      throw new ApiError(400, "CLASS_REQUIRED", "Pick a class before uploading homework");
+    }
     const file = form.get("file");
     if (!(file instanceof File)) {
-      return NextResponse.json({ ok: false, error: "No file" }, { status: 400 });
-    }
-    if (file.size > MAX_BYTES) {
-      return NextResponse.json({ ok: false, error: "File too large (max 5 MB)" }, { status: 413 });
-    }
-    if (!ALLOWED.has(file.type)) {
-      return NextResponse.json({ ok: false, error: `Unsupported type: ${file.type}. Use JPEG/PNG/WebP/PDF.` }, { status: 415 });
+      throw new ApiError(400, "FILE_REQUIRED", "Choose a file to upload");
     }
 
-    const ext = file.name.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
-    const key = `${institution.id}/${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    const allowed = await validateHomeworkFile(file);
+    const canUpload = await withRls(user.id, async (tx) => {
+      const cls = await tx.class.findFirst({ where: { id: classId, institutionId: institution.id }, select: { id: true } });
+      if (!cls) return false;
+      if (membership.role === "OWNER" || membership.role === "ADMIN") return true;
+      if (membership.role !== "TEACHER") return false;
+      const teacherClassIds = await getTeacherClassIds(tx, user.id, institution.id, "TEACHER");
+      return !!teacherClassIds?.includes(classId);
+    });
+    if (!canUpload) {
+      throw new ApiError(403, "HOMEWORK_UPLOAD_FORBIDDEN", "You cannot upload homework for this class");
+    }
 
-    const admin = createServiceClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
-    const { error } = await admin.storage.from("homework").upload(key, file, {
+    const key = buildHomeworkObjectKey(institution.id, classId, user.id, allowed.ext);
+    const admin = getHomeworkStorageClient();
+    const { error } = await admin.storage.from(HOMEWORK_BUCKET).upload(key, file, {
       contentType: file.type,
       upsert: false,
     });
     if (error) {
-      return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+      console.error("[homework/upload] storage failure", error.message);
+      throw new ApiError(500, "STORAGE_UPLOAD_FAILED", "Could not upload homework file");
     }
-    const { data } = admin.storage.from("homework").getPublicUrl(key);
-    return NextResponse.json({ ok: true, url: data.publicUrl, mime: file.type });
-  } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Failed" }, { status: 500 });
+    const signedUrl = await createHomeworkSignedUrl(key);
+    await writeAuditEvent({
+      actorUserId: user.id,
+      institutionId: institution.id,
+      action: "homework.upload",
+      targetId: classId,
+      outcome: "success",
+      meta: { mime: file.type, size: file.size },
+    });
+
+    return NextResponse.json({ ok: true, objectKey: key, signedUrl, mime: file.type });
+  } catch (err) {
+    if (err instanceof ApiError) {
+      if (audit) {
+        await writeAuditEvent({
+          actorUserId: audit.actorUserId,
+          institutionId: audit.institutionId,
+          action: "homework.upload",
+          targetId: audit.classId ?? null,
+          outcome: err.status === 403 ? "denied" : "failure",
+          meta: { code: err.code },
+        });
+      }
+      return errorResponse(err);
+    }
+    console.error("[homework/upload] failed", err instanceof Error ? err.message : err);
+    return serverErrorResponse("Failed to upload homework file");
   }
 }
