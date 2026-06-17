@@ -4,6 +4,11 @@ import { requireInstitution } from "@/lib/tenant/current";
 import { withRls } from "@/lib/prisma/rls";
 import { whatsappLink } from "@/lib/format/phone";
 import { formatDateLong } from "@/lib/format/date";
+import { ApiError, errorResponse, serverErrorResponse } from "@/lib/api/errors";
+import { writeAuditEvent } from "@/lib/audit/server";
+import { requireAttendanceClassAccess } from "@/lib/attendance/access";
+import { parseAttendanceDate } from "@/lib/attendance/validation";
+import { replaceAttendanceRecords } from "@/lib/attendance/save";
 
 const attendanceSchema = z.object({
   classId:      z.string().min(1),
@@ -17,79 +22,92 @@ const attendanceSchema = z.object({
 });
 
 export async function GET(req: Request) {
+  let audit:
+    | { actorUserId: string; institutionId: string; classId?: string | null; date?: string | null }
+    | null = null;
   try {
-    const { user, institution } = await requireInstitution();
+    const { user, institution, membership } = await requireInstitution();
     const { searchParams } = new URL(req.url);
     const classId = searchParams.get("classId");
     const date    = searchParams.get("date");
+    audit = { actorUserId: user.id, institutionId: institution.id, classId, date };
 
     if (!classId || !date) {
       return NextResponse.json({ ok: false, error: "classId and date are required" }, { status: 400 });
     }
+    const sessionDate = parseAttendanceDate(date);
 
-    const session = await withRls(user.id, (tx) =>
-      tx.attendanceSession.findFirst({
+    const session = await withRls(user.id, async (tx) => {
+      await requireAttendanceClassAccess(tx, user.id, institution.id, membership.role, classId);
+      return tx.attendanceSession.findFirst({
         where: {
           classId,
           institutionId: institution.id,
-          sessionDate: new Date(date),
+          sessionDate,
         },
         include: { records: true },
-      })
-    );
+      });
+    });
 
     return NextResponse.json({ ok: true, session });
-  } catch {
-    return NextResponse.json({ ok: false, error: "Unauthorised" }, { status: 401 });
+  } catch (err) {
+    if (err instanceof ApiError) {
+      if (audit && err.status === 403) {
+        await writeAuditEvent({
+          actorUserId: audit.actorUserId,
+          institutionId: audit.institutionId,
+          action: "attendance.read.denied",
+          targetId: audit.classId ?? null,
+          outcome: "denied",
+          meta: { code: err.code, date: audit.date },
+        });
+      }
+      return errorResponse(err);
+    }
+    return NextResponse.json({ ok: false, error: "Unauthorised", code: "UNAUTHORISED" }, { status: 401 });
   }
 }
 
 export async function POST(req: Request) {
+  let audit:
+    | { actorUserId: string; institutionId: string; classId?: string | null; date?: string | null }
+    | null = null;
   try {
-    const { user, institution } = await requireInstitution();
+    const { user, institution, membership } = await requireInstitution();
     const parsed = attendanceSchema.safeParse(await req.json());
     if (!parsed.success) {
       return NextResponse.json({ ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
     }
     const { classId, date, records } = parsed.data;
+    audit = { actorUserId: user.id, institutionId: institution.id, classId, date };
     const sessionLabel = parsed.data.sessionLabel ?? "morning";
+    const sessionDate = parseAttendanceDate(date);
     const cleaned = records;
 
     const session = await withRls(user.id, async (tx) => {
-      const session = await tx.attendanceSession.upsert({
-        where: {
-          classId_sessionDate_sessionLabel: {
-            classId,
-            sessionDate: new Date(date),
-            sessionLabel,
-          },
-        },
-        create: {
-          institutionId: institution.id,
-          classId,
-          sessionDate: new Date(date),
-          sessionLabel,
-          markedBy: user.id,
-        },
-        update: {
-          markedAt: new Date(),
-        },
+      await requireAttendanceClassAccess(tx, user.id, institution.id, membership.role, classId);
+      return replaceAttendanceRecords(tx, {
+        institutionId: institution.id,
+        classId,
+        sessionDate,
+        sessionLabel,
+        markedBy: user.id,
+        records: cleaned,
       });
+    });
 
-      // Replace all records for this session
-      await tx.attendanceRecord.deleteMany({ where: { sessionId: session.id } });
-      if (cleaned.length > 0) {
-        await tx.attendanceRecord.createMany({
-          data: cleaned.map(r => ({
-            sessionId: session.id,
-            studentId: r.studentId,
-            status:    r.status,
-            note:      r.note ?? null,
-          })),
-        });
-      }
-
-      return session;
+    await writeAuditEvent({
+      actorUserId: user.id,
+      institutionId: institution.id,
+      action: "attendance.save",
+      targetId: session.id,
+      outcome: "success",
+      meta: {
+        classId,
+        date,
+        sessionLabel,
+        recordCount: cleaned.length,
+      },
     });
 
     // Build absent-alert payload: WhatsApp deep-links for primary guardians of absent students.
@@ -129,8 +147,31 @@ export async function POST(req: Request) {
       .filter((x): x is NonNullable<typeof x> => x !== null);
 
     return NextResponse.json({ ok: true, sessionId: session.id, alerts });
-  } catch (e) {
-    console.error(e);
-    return NextResponse.json({ ok: false, error: "Failed to save attendance" }, { status: 500 });
+  } catch (err) {
+    if (err instanceof ApiError) {
+      if (audit && [400, 403, 404].includes(err.status)) {
+        await writeAuditEvent({
+          actorUserId: audit.actorUserId,
+          institutionId: audit.institutionId,
+          action: "attendance.save.denied",
+          targetId: audit.classId ?? null,
+          outcome: "denied",
+          meta: { code: err.code, date: audit.date },
+        });
+      }
+      return errorResponse(err);
+    }
+    console.error("[attendance] save failed", err instanceof Error ? err.message : err);
+    if (audit) {
+      await writeAuditEvent({
+        actorUserId: audit.actorUserId,
+        institutionId: audit.institutionId,
+        action: "attendance.save",
+        targetId: audit.classId ?? null,
+        outcome: "failure",
+        meta: { date: audit.date },
+      });
+    }
+    return serverErrorResponse("Failed to save attendance");
   }
 }

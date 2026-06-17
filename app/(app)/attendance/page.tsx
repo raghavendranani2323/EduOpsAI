@@ -4,10 +4,11 @@ import { requireInstitution } from "@/lib/tenant/current";
 import { withRls } from "@/lib/prisma/rls";
 import { getTerminology } from "@/lib/i18n/terminology";
 import { todayIST, formatDateLong } from "@/lib/format/date";
-import { getTeacherClassIds } from "@/lib/tenant/teacher-scope";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
+import { getAttendanceAccessibleClassIds } from "@/lib/attendance/access";
+import { notFound } from "next/navigation";
 
 type ClassWithAttendance = {
   id: string; name: string; section: string | null;
@@ -20,9 +21,10 @@ export default async function AttendancePage() {
   const t = getTerminology(institution.type);
   const today = todayIST();
   const isTeacher = membership.role === "TEACHER";
+  if (!["OWNER", "ADMIN", "TEACHER"].includes(membership.role)) notFound();
 
   const { classes, scopedToTeacher } = await withRls(user.id, async (tx) => {
-    const teacherIds = await getTeacherClassIds(tx, user.id, institution.id, membership.role);
+    const teacherIds = await getAttendanceAccessibleClassIds(tx, user.id, institution.id, membership.role);
     const scoped = teacherIds !== null;
 
     const rows = await tx.class.findMany({

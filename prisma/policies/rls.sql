@@ -105,16 +105,48 @@ CREATE POLICY st_delete ON student_tags FOR DELETE
 
 -- ── attendance ──────────────────────────────────────────────
 CREATE POLICY att_sess_select ON attendance_sessions FOR SELECT USING (is_member("institutionId"));
-CREATE POLICY att_sess_insert ON attendance_sessions FOR INSERT WITH CHECK (has_role("institutionId", 'OWNER', 'ADMIN', 'TEACHER'));
-CREATE POLICY att_sess_update ON attendance_sessions FOR UPDATE USING (has_role("institutionId", 'OWNER', 'ADMIN', 'TEACHER')) WITH CHECK (has_role("institutionId", 'OWNER', 'ADMIN', 'TEACHER'));
+CREATE POLICY att_sess_insert ON attendance_sessions FOR INSERT WITH CHECK (
+  has_role("institutionId", 'OWNER', 'ADMIN', 'TEACHER')
+  AND EXISTS (SELECT 1 FROM classes c WHERE c.id = attendance_sessions."classId" AND c."institutionId" = attendance_sessions."institutionId")
+);
+CREATE POLICY att_sess_update ON attendance_sessions FOR UPDATE
+  USING (has_role("institutionId", 'OWNER', 'ADMIN', 'TEACHER'))
+  WITH CHECK (
+    has_role("institutionId", 'OWNER', 'ADMIN', 'TEACHER')
+    AND EXISTS (
+      SELECT 1 FROM classes c
+      WHERE c.id = attendance_sessions."classId"
+        AND c."institutionId" = attendance_sessions."institutionId"
+    )
+  );
 
 CREATE POLICY att_rec_select ON attendance_records FOR SELECT
   USING (EXISTS (SELECT 1 FROM attendance_sessions s WHERE s.id = "sessionId" AND is_member(s."institutionId")));
 CREATE POLICY att_rec_insert ON attendance_records FOR INSERT
-  WITH CHECK (EXISTS (SELECT 1 FROM attendance_sessions s WHERE s.id = "sessionId" AND has_role(s."institutionId", 'OWNER', 'ADMIN', 'TEACHER')));
+  WITH CHECK (EXISTS (
+    SELECT 1
+    FROM attendance_sessions s
+    JOIN students st ON st.id = attendance_records."studentId"
+    WHERE s.id = attendance_records."sessionId"
+      AND st."institutionId" = s."institutionId"
+      AND st."classId" = s."classId"
+      AND st.status = 'ACTIVE'
+      AND has_role(s."institutionId", 'OWNER', 'ADMIN', 'TEACHER')
+  ));
 CREATE POLICY att_rec_update ON attendance_records FOR UPDATE
   USING (EXISTS (SELECT 1 FROM attendance_sessions s WHERE s.id = "sessionId" AND has_role(s."institutionId", 'OWNER', 'ADMIN', 'TEACHER')))
-  WITH CHECK (EXISTS (SELECT 1 FROM attendance_sessions s WHERE s.id = "sessionId" AND has_role(s."institutionId", 'OWNER', 'ADMIN', 'TEACHER')));
+  WITH CHECK (EXISTS (
+    SELECT 1
+    FROM attendance_sessions s
+    JOIN students st ON st.id = attendance_records."studentId"
+    WHERE s.id = attendance_records."sessionId"
+      AND st."institutionId" = s."institutionId"
+      AND st."classId" = s."classId"
+      AND st.status = 'ACTIVE'
+      AND has_role(s."institutionId", 'OWNER', 'ADMIN', 'TEACHER')
+  ));
+CREATE POLICY att_rec_delete ON attendance_records FOR DELETE
+  USING (EXISTS (SELECT 1 FROM attendance_sessions s WHERE s.id = attendance_records."sessionId" AND has_role(s."institutionId", 'OWNER', 'ADMIN', 'TEACHER')));
 
 -- ── fees ────────────────────────────────────────────────────
 CREATE POLICY fp_select ON fee_plans FOR SELECT USING (is_member("institutionId"));
