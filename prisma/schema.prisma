@@ -74,30 +74,31 @@ model Institution {
   createdAt            DateTime        @default(now())
   updatedAt            DateTime        @updatedAt
 
-  memberships    Membership[]
-  invitations    Invitation[]
-  academicYears  AcademicYear[]
-  classGroups    ClassGroup[]
-  classes        Class[]
-  students       Student[]
-  guardians      Guardian[]
-  tags           Tag[]
-  sessions       AttendanceSession[]
-  feePlans       FeePlan[]
-  feeAdjustments FeeAdjustment[]
-  invoices       Invoice[]
-  payments       Payment[]
-  leads          Lead[]
-  leadActivities LeadActivity[]
-  templates      MessageTemplate[]
-  messages       Message[]
-  subjects       Subject[]
-  exams          Exam[]
-  examResults    ExamResult[]
-  timetableSlots TimetableSlot[]
-  homework       Homework[]
-  notices        Notice[]
-  leaveRequests  LeaveRequest[]
+  memberships        Membership[]
+  invitations        Invitation[]
+  academicYears      AcademicYear[]
+  classGroups        ClassGroup[]
+  classes            Class[]
+  students           Student[]
+  guardians          Guardian[]
+  tags               Tag[]
+  sessions           AttendanceSession[]
+  feePlans           FeePlan[]
+  feeAdjustments     FeeAdjustment[]
+  invoices           Invoice[]
+  payments           Payment[]
+  leads              Lead[]
+  leadActivities     LeadActivity[]
+  templates          MessageTemplate[]
+  messages           Message[]
+  subjects           Subject[]
+  exams              Exam[]
+  examResults        ExamResult[]
+  timetableSlots     TimetableSlot[]
+  homework           Homework[]
+  notices            Notice[]
+  leaveRequests      LeaveRequest[]
+  parentAccessEvents ParentAccessEvent[]
 
   @@map("institutions")
 }
@@ -242,35 +243,39 @@ model Class {
 }
 
 model Student {
-  id            String        @id @default(cuid())
-  institutionId String
-  fullName      String
-  admissionNo   String?
-  dob           DateTime?
-  gender        Gender?
-  classId       String?
-  status        StudentStatus @default(ACTIVE)
-  archivedAt    DateTime?
-  portalToken   String?       @unique
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  id                   String        @id @default(cuid())
+  institutionId        String
+  fullName             String
+  admissionNo          String?
+  dob                  DateTime?
+  gender               Gender?
+  classId              String?
+  status               StudentStatus @default(ACTIVE)
+  archivedAt           DateTime?
+  portalToken          String?       @unique
+  portalTokenCreatedAt DateTime?
+  portalTokenExpiresAt DateTime?
+  portalTokenRevokedAt DateTime?
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
 
-  institution              Institution        @relation(fields: [institutionId], references: [id], onDelete: Cascade)
-  class                    Class?             @relation(fields: [classId], references: [id])
+  institution              Institution         @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  class                    Class?              @relation(fields: [classId], references: [id])
   guardians                StudentGuardian[]
   studentTags              StudentTag[]
   attendanceRecords        AttendanceRecord[]
   invoices                 Invoice[]
   feeAdjustments           FeeAdjustment[]
-  leads                    Lead[]             @relation("ConvertedStudent")
+  leads                    Lead[]              @relation("ConvertedStudent")
   examResults              ExamResult[]
   noticeReads              NoticeRead[]
-  classGroupLeaderFor      ClassGroup[]       @relation("ClassGroupLeader")
-  classGroupGirlsLeaderFor ClassGroup[]       @relation("ClassGroupGirlsLeader")
-  classGroupBoysLeaderFor  ClassGroup[]       @relation("ClassGroupBoysLeader")
-  sectionLeaderFor         Class[]            @relation("SectionLeader")
-  sectionGirlsLeaderFor    Class[]            @relation("SectionGirlsLeader")
-  sectionBoysLeaderFor     Class[]            @relation("SectionBoysLeader")
+  parentAccessEvents       ParentAccessEvent[]
+  classGroupLeaderFor      ClassGroup[]        @relation("ClassGroupLeader")
+  classGroupGirlsLeaderFor ClassGroup[]        @relation("ClassGroupGirlsLeader")
+  classGroupBoysLeaderFor  ClassGroup[]        @relation("ClassGroupBoysLeader")
+  sectionLeaderFor         Class[]             @relation("SectionLeader")
+  sectionGirlsLeaderFor    Class[]             @relation("SectionGirlsLeader")
+  sectionBoysLeaderFor     Class[]             @relation("SectionBoysLeader")
 
   @@index([institutionId, classId, status])
   @@map("students")
@@ -300,6 +305,31 @@ model Guardian {
 
   @@index([institutionId, phone])
   @@map("guardians")
+}
+
+model ParentAccessEvent {
+  id            String                  @id @default(cuid())
+  institutionId String
+  studentId     String
+  actorUserId   String?
+  action        ParentAccessEventAction
+  meta          Json?
+  createdAt     DateTime                @default(now())
+
+  institution Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  student     Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([institutionId, studentId, createdAt])
+  @@map("parent_access_events")
+}
+
+enum ParentAccessEventAction {
+  GENERATED
+  ROTATED
+  REVOKED
+  VIEWED
+  EXPIRED
+  DENIED
 }
 
 model StudentGuardian {

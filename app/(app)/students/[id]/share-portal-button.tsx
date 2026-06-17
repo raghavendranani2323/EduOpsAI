@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Share2, Copy, MessageCircle, X, Check } from "lucide-react";
+import { Share2, Copy, MessageCircle, X, Check, RefreshCw, ShieldOff } from "lucide-react";
 
 interface Props {
   studentId: string;
@@ -11,7 +11,8 @@ interface Props {
 export function SharePortalButton({ studentId, studentName }: Props) {
   const [open, setOpen]       = useState(false);
   const [loading, setLoading] = useState(false);
-  const [data, setData]       = useState<{ url: string; shareLink: string | null; guardianName: string | null; guardianPhone: string | null } | null>(null);
+  const [data, setData]       = useState<{ url: string; shareLink: string | null; guardianName: string | null; guardianPhone: string | null; expiresAt: string } | null>(null);
+  const [events, setEvents]   = useState<Array<{ id: string; action: string; createdAt: string }>>([]);
   const [error, setError]     = useState<string | null>(null);
   const [copied, setCopied]   = useState(false);
 
@@ -20,11 +21,46 @@ export function SharePortalButton({ studentId, studentName }: Props) {
     if (data) return;
     setLoading(true);
     setError(null);
-    const res = await fetch(`/api/students/${studentId}/portal-token`, { method: "POST" });
+    const res = await fetch(`/api/students/${studentId}/portal-token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "GENERATE" }),
+    });
     const result = await res.json();
     setLoading(false);
     if (!result.ok) { setError(result.error ?? "Failed"); return; }
     setData(result);
+    await loadHistory();
+  }
+
+  async function loadHistory() {
+    const res = await fetch(`/api/students/${studentId}/portal-token`);
+    const result = await res.json();
+    if (result.ok) setEvents(result.events);
+  }
+
+  async function rotate() {
+    if (!confirm("Rotate this link? The old link will stop working immediately.")) return;
+    setLoading(true);
+    const res = await fetch(`/api/students/${studentId}/portal-token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "ROTATE" }),
+    });
+    const result = await res.json();
+    setLoading(false);
+    if (!result.ok) { setError(result.error); return; }
+    setData(result);
+    await loadHistory();
+  }
+
+  async function revoke() {
+    if (!confirm("Revoke parent access for this link?")) return;
+    const res = await fetch(`/api/students/${studentId}/portal-token`, { method: "DELETE" });
+    const result = await res.json();
+    if (!result.ok) { setError(result.error); return; }
+    setData(null);
+    await loadHistory();
   }
 
   function copy() {
@@ -89,9 +125,29 @@ export function SharePortalButton({ studentId, studentName }: Props) {
                     )}
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Parent sees attendance, fees, homework and notices. The link does not require login.
+                    Parent sees attendance, fees, homework and notices. This private link expires on {new Date(data.expiresAt).toLocaleDateString("en-IN")}.
                   </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button onClick={rotate} className="min-h-[44px] rounded-xl border text-sm font-medium flex items-center justify-center gap-2">
+                      <RefreshCw className="h-4 w-4" /> Rotate
+                    </button>
+                    <button onClick={revoke} className="min-h-[44px] rounded-xl border border-destructive/40 text-destructive text-sm font-medium flex items-center justify-center gap-2">
+                      <ShieldOff className="h-4 w-4" /> Revoke
+                    </button>
+                  </div>
                 </>
+              )}
+              {events.length > 0 && (
+                <div className="border-t pt-3">
+                  <p className="text-xs font-semibold mb-2">Access history</p>
+                  <div className="max-h-28 overflow-y-auto space-y-1">
+                    {events.map(event => (
+                      <p key={event.id} className="text-xs text-muted-foreground">
+                        {event.action.toLowerCase()} · {new Date(event.createdAt).toLocaleString("en-IN")}
+                      </p>
+                    ))}
+                  </div>
+                </div>
               )}
             </div>
           </div>

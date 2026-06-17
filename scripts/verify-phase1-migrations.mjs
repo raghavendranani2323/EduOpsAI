@@ -7,14 +7,16 @@ const foundationsPath = "prisma/migrations/phase5_api_foundations.sql";
 const permissionsPath = "prisma/migrations/phase6_permission_hardening.sql";
 const integrityPath = "prisma/migrations/phase7_non_payment_data_integrity.sql";
 const crmPath = "prisma/migrations/phase8_admissions_crm.sql";
+const parentPath = "prisma/migrations/phase9_parent_access.sql";
 
-const [attendanceSql, invitationsSql, foundationsSql, permissionsSql, integritySql, crmSql] = await Promise.all([
+const [attendanceSql, invitationsSql, foundationsSql, permissionsSql, integritySql, crmSql, parentSql] = await Promise.all([
   readFile(attendancePath, "utf8"),
   readFile(invitationsPath, "utf8"),
   readFile(foundationsPath, "utf8"),
   readFile(permissionsPath, "utf8"),
   readFile(integrityPath, "utf8"),
   readFile(crmPath, "utf8"),
+  readFile(parentPath, "utf8"),
 ]);
 
 const requiredAttendancePolicies = [
@@ -27,6 +29,15 @@ const requiredAttendancePolicies = [
 for (const policy of requiredAttendancePolicies) {
   if (!attendanceSql.includes(`CREATE POLICY ${policy}`)) {
     throw new Error(`${attendancePath} is missing ${policy}`);
+  }
+}
+for (const required of [
+  "CREATE TABLE IF NOT EXISTS parent_access_events",
+  "CREATE POLICY parent_access_events_select",
+  "portalTokenExpiresAt",
+]) {
+  if (!parentSql.includes(required)) {
+    throw new Error(`${parentPath} is missing ${required}`);
   }
 }
 for (const required of [

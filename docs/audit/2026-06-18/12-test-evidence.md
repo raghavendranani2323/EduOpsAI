@@ -358,3 +358,15 @@ database and dedicated RLS URLs are available.
 
 Live role sessions, activity RLS, and database-trigger execution remain blocked
 without staging identities and dedicated database credentials.
+
+## Phase 4 PARENT-001 - 18/06/2026
+
+| Command | Result |
+|---|---|
+| `pnpm test:phase4-parent` | Passed expiry, rotation, revocation, active-token, phone-variant, OTP, UI, and migration checks. |
+| `pnpm test:migrations` | Static verification passed; live parent-access migration/RLS checks blocked. |
+| `pnpm typecheck` | Passed after regenerating Prisma Client. |
+| `pnpm lint` | Passed with 17 existing warnings and no errors. |
+
+Live Supabase OTP delivery, distinct parent identities, access-event RLS, and
+token expiry against a staging clock remain blocked by external configuration.

@@ -1,4 +1,3 @@
-import { notFound } from "next/navigation";
 import Link from "next/link";
 import { GraduationCap, CalendarCheck, Wallet, BookOpen, Megaphone, ChevronRight } from "lucide-react";
 import { prismaAdmin } from "@/lib/prisma/admin";
@@ -7,23 +6,43 @@ import { formatDate } from "@/lib/format/date";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
+import { InvalidParentLink } from "./invalid-link";
+import { isParentTokenActive } from "@/lib/parent/access";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function ParentPortalPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  if (!token || token.length < 12) notFound();
+  if (!token || token.length < 32) return <InvalidParentLink />;
 
-  const student = await prismaAdmin.student.findUnique({
-    where: { portalToken: token },
+  const student = await prismaAdmin.student.findFirst({
+    where: { portalToken: token, status: "ACTIVE" },
     include: {
       class:       { select: { name: true } },
       institution: { select: { name: true, type: true } },
       guardians:   { include: { guardian: { select: { fullName: true, phone: true } } }, take: 1 },
     },
   });
-  if (!student) notFound();
+  if (!student) return <InvalidParentLink />;
+  if (!isParentTokenActive(student)) {
+    await prismaAdmin.parentAccessEvent.create({
+      data: {
+        institutionId: student.institutionId,
+        studentId: student.id,
+        action: "EXPIRED",
+      },
+    }).catch(() => undefined);
+    return <InvalidParentLink expired />;
+  }
+  await prismaAdmin.parentAccessEvent.create({
+    data: {
+      institutionId: student.institutionId,
+      studentId: student.id,
+      action: "VIEWED",
+      meta: { surface: "bearer_link" },
+    },
+  }).catch(() => undefined);
 
   const today = new Date();
   const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
@@ -64,8 +83,6 @@ export default async function ParentPortalPage({ params }: { params: Promise<{ t
     : null;
 
   const initials = student.fullName.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase();
-  const guardianPhone = student.guardians[0]?.guardian.phone ?? null;
-
   return (
     <div className="min-h-[100dvh] bg-muted/30">
       {/* Hero */}
@@ -215,7 +232,8 @@ export default async function ParentPortalPage({ params }: { params: Promise<{ t
 
 
         <footer className="text-center text-xs text-muted-foreground pt-4">
-          Private link for {student.fullName}. Do not share outside the family.
+          Private temporary link for {student.fullName}. It expires on{" "}
+          {student.portalTokenExpiresAt?.toLocaleDateString("en-IN")}. Do not share outside the family.
         </footer>
       </main>
     </div>

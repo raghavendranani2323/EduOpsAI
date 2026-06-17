@@ -1,5 +1,6 @@
 import { prismaAdmin } from "@/lib/prisma/admin";
 import { phoneVariants } from "./config";
+import { isParentTokenActive } from "./access";
 
 export interface ParentChild {
   id: string;
@@ -17,6 +18,7 @@ export async function findChildrenForPhone(phone: string): Promise<ParentChild[]
     where: { phone: { in: variants } },
     include: {
       students: {
+        where: { student: { status: "ACTIVE" } },
         include: {
           student: {
             include: {
@@ -40,7 +42,7 @@ export async function findChildrenForPhone(phone: string): Promise<ParentChild[]
         id: s.id,
         fullName: s.fullName,
         admissionNo: s.admissionNo,
-        portalToken: s.portalToken,
+        portalToken: isParentTokenActive(s) ? s.portalToken : null,
         className: s.class?.name ?? null,
         institutionName: s.institution.name,
         guardianRelation: link.relation ?? null,

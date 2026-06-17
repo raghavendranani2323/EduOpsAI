@@ -5,6 +5,7 @@ import { ApiError, errorResponse, serverErrorResponse } from "@/lib/api/errors";
 import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { requestIdFrom } from "@/lib/observability/request";
 import { logServer } from "@/lib/observability/logger";
+import { findChildrenForPhone } from "@/lib/parent/children";
 
 export async function POST(req: Request) {
   const requestId = requestIdFrom(req);
@@ -21,6 +22,10 @@ export async function POST(req: Request) {
       limit: 5,
       windowSeconds: 15 * 60,
     });
+    const children = await findChildrenForPhone(phone);
+    if (children.length === 0) {
+      return NextResponse.json({ ok: true, message: "If the number is eligible, an OTP will arrive shortly" });
+    }
 
     const supabase = await createClient();
     const { error } = await supabase.auth.signInWithOtp({ phone, options: { shouldCreateUser: true } });

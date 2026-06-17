@@ -10,11 +10,11 @@ Updated: 18/06/2026
 
 ## Current Phase
 
-Phase 4 - CRM-001 is locally complete. Parent access and communications remain.
+Phase 4 - CRM-001 and PARENT-001 are locally complete. Communications remains.
 
-- Last completed issue: `CRM-001`
+- Last completed issue: `PARENT-001`
 - Next exact phase: Phase 4 - admissions, parent access, and communications
-- Next exact issue: `PARENT-001`
+- Next exact issue: `MSG-001`
 
 ## Completed
 
@@ -50,6 +50,11 @@ Phase 4 - CRM-001 is locally complete. Parent access and communications remain.
 - Admissions now includes overdue follow-ups, call/WhatsApp actions, quick
   notes, durable activity history, ownership, lost reasons, duplicate signals,
   safe conversion conflicts, and conversion audit history.
+- Parent links now expire, rotate, revoke, regenerate, and retain audit history;
+  invalid/expired links fail safely with privacy/support guidance.
+- Parent OTP checks eligibility without account enumeration, rate-limits
+  verification, preserves sibling/multi-child handling, and handles changed
+  phone records safely.
 
 ## Partial Or Blocked
 
@@ -75,6 +80,7 @@ Phase 4 - CRM-001 is locally complete. Parent access and communications remain.
 - `pnpm test:permissions`: passed.
 - `pnpm test:data-integrity`: passed.
 - `pnpm test:phase4-crm`: passed.
+- `pnpm test:phase4-parent`: passed.
 - `pnpm test:migrations`: static verification passed; live verification
   skipped because `RLS_TEST_SUPERUSER_URL` is unavailable.
 - `pnpm typecheck`: passed.
@@ -104,8 +110,8 @@ Phase 4 - CRM-001 is locally complete. Parent access and communications remain.
 
 ## Resume
 
-Continue Phase 4 with `PARENT-001`, then `MSG-001`. Apply
+Continue Phase 4 with `MSG-001`. Apply
 `phase5_api_foundations.sql`, `phase6_permission_hardening.sql`, and
-`phase7_non_payment_data_integrity.sql`, then `phase8_admissions_crm.sql` in
-order before staging verification. Re-run live Phase 0-4 checks when staging
-credentials and role fixtures are available.
+`phase7_non_payment_data_integrity.sql`, `phase8_admissions_crm.sql`, then
+`phase9_parent_access.sql` in order before staging verification. Re-run live
+Phase 0-4 checks when staging credentials and role fixtures are available.
