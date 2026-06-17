@@ -318,3 +318,30 @@ Live role/tenant API and RLS testing remains blocked without distinct staging
 identities and dedicated database URLs. Apply
 `prisma/migrations/phase6_permission_hardening.sql` after the earlier security
 migrations before running those tests.
+
+## Phase 3 Non-Payment Data Integrity - 18/06/2026
+
+Implemented normalized tenant admission uniqueness, pending-invitation
+uniqueness, class-section and subject identity rules, academic-year relation
+backfill/mirroring, cross-tenant relationship triggers, timetable overlap
+protection, operational indexes, archival student deletion, application-level
+validation, and seed compatibility.
+
+Validation:
+
+| Command | Result |
+|---|---|
+| `pnpm test:data-integrity` | Passed after wrapping asynchronous assertions for the repository's CommonJS test output. |
+| `pnpm test:migrations` | Static verification passed; live Phase 7 object verification blocked by missing dedicated database URL. |
+| `pnpm typecheck` | Passed. |
+| `pnpm test:permissions` | Passed during checkpoint recovery. |
+| `pnpm test:phase1` | Passed. |
+| `pnpm test:api-foundations` | Passed. |
+| `pnpm lint` | Passed with 18 existing warnings and no errors. |
+| `pnpm build` | Passed; Next.js 16.2.7 generated 69 static pages. |
+| `pnpm audit --audit-level moderate` | Failed with the existing 8 advisories: 1 high, 6 moderate, 1 low. |
+| `pnpm test:rls` | Blocked because dedicated test URLs are not configured. |
+
+Live migration execution, trigger/RLS transactions, query plans, lock timing,
+and realistic database index sizes remain blocked until a restored staging
+database and dedicated RLS URLs are available.

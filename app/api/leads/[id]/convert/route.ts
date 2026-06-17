@@ -4,6 +4,11 @@ import { withRls } from "@/lib/prisma/rls";
 import { ApiError, errorResponse, serverErrorResponse } from "@/lib/api/errors";
 import { assertRole } from "@/lib/auth/permissions";
 import { writeAuditEvent } from "@/lib/audit/server";
+import {
+  assertAdmissionNoAvailable,
+  assertStudentClass,
+  normalizeAdmissionNo,
+} from "@/lib/data-integrity/validation";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -16,20 +21,18 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       const lead = await tx.lead.findFirst({ where: { id: leadId, institutionId: institution.id } });
       if (!lead) throw new ApiError(404, "LEAD_NOT_FOUND", "Lead not found");
       if (lead.stage === "CONVERTED") throw new ApiError(409, "LEAD_ALREADY_CONVERTED", "Lead is already converted");
-      if (body.classId) {
-        const cls = await tx.class.findFirst({
-          where: { id: body.classId, institutionId: institution.id },
-          select: { id: true },
-        });
-        if (!cls) throw new ApiError(400, "INVALID_LEAD_CLASS", "Selected class is not valid");
-      }
+      const admissionNo = normalizeAdmissionNo(body.admissionNo);
+      await Promise.all([
+        assertAdmissionNoAvailable(tx, institution.id, admissionNo),
+        assertStudentClass(tx, institution.id, body.classId),
+      ]);
 
       // Create student from lead data
       const s = await tx.student.create({
         data: {
           institutionId: institution.id,
           fullName:      lead.studentName,
-          admissionNo:   body.admissionNo?.trim() || null,
+          admissionNo,
           classId:       body.classId || null,
           status:        "ACTIVE",
         },

@@ -5,12 +5,14 @@ const attendancePath = "prisma/migrations/phase4_attendance_integrity.sql";
 const invitationsPath = "prisma/migrations/phase4_secure_staff_invitations.sql";
 const foundationsPath = "prisma/migrations/phase5_api_foundations.sql";
 const permissionsPath = "prisma/migrations/phase6_permission_hardening.sql";
+const integrityPath = "prisma/migrations/phase7_non_payment_data_integrity.sql";
 
-const [attendanceSql, invitationsSql, foundationsSql, permissionsSql] = await Promise.all([
+const [attendanceSql, invitationsSql, foundationsSql, permissionsSql, integritySql] = await Promise.all([
   readFile(attendancePath, "utf8"),
   readFile(invitationsPath, "utf8"),
   readFile(foundationsPath, "utf8"),
   readFile(permissionsPath, "utf8"),
+  readFile(integrityPath, "utf8"),
 ]);
 
 const requiredAttendancePolicies = [
@@ -37,10 +39,30 @@ if (!foundationsSql.includes("CREATE TABLE IF NOT EXISTS rate_limit_counters")) 
 if (!permissionsSql.includes("CREATE OR REPLACE FUNCTION can_access_class")) {
   throw new Error(`${permissionsPath} is missing can_access_class`);
 }
+if (!integritySql.includes("CREATE TRIGGER classes_academic_consistency")) {
+  throw new Error(`${integrityPath} is missing academic consistency trigger`);
+}
+for (const required of [
+  "Preconditions:",
+  "Backfill:",
+  "RLS:",
+  "Lock/performance:",
+  "Rollback:",
+  "Staging verification:",
+  "Production verification:",
+  "students_institution_admission_no_key",
+  "invitations_pending_email_key",
+  "timetable_slots_scope_collision",
+  "Cross-tenant or cross-class references",
+]) {
+  if (!integritySql.includes(required)) {
+    throw new Error(`${integrityPath} is missing ${required}`);
+  }
+}
 
 const url = process.env.RLS_TEST_SUPERUSER_URL;
 if (!url) {
-  console.log("Phase 1 migration SQL passed static verification.");
+  console.log("Ordered remediation migration SQL passed static verification.");
   console.log("Live migration verification skipped: RLS_TEST_SUPERUSER_URL is not configured.");
   process.exit(0);
 }
@@ -97,7 +119,25 @@ try {
     throw new Error("Class permission function is not applied");
   }
 
-  console.log("Security migrations are present and RLS remains enabled.");
+  const integrityObjects = await db.query(`
+    SELECT
+      to_regclass('public.students_institution_admission_no_key') IS NOT NULL AS admission_index,
+      to_regclass('public.invitations_pending_email_key') IS NOT NULL AS invitation_index,
+      EXISTS (
+        SELECT 1 FROM pg_trigger
+        WHERE tgname = 'classes_academic_consistency' AND NOT tgisinternal
+      ) AS class_trigger,
+      EXISTS (
+        SELECT 1 FROM pg_trigger
+        WHERE tgname = 'timetable_slots_scope_collision' AND NOT tgisinternal
+      ) AS timetable_trigger
+  `);
+  const integrity = integrityObjects.rows[0];
+  if (!integrity.admission_index || !integrity.invitation_index || !integrity.class_trigger || !integrity.timetable_trigger) {
+    throw new Error("Phase 7 data-integrity objects are not fully applied");
+  }
+
+  console.log("Remediation migrations are present and RLS remains enabled.");
 } finally {
   await db.end();
 }

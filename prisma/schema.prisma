@@ -12,7 +12,7 @@ datasource db {
 // ─────────────────────────────────────────────
 
 model Profile {
-  id            String   @id // = auth.users.id
+  id            String    @id // = auth.users.id
   fullName      String
   phone         String?
   email         String?
@@ -20,8 +20,8 @@ model Profile {
   designation   String?
   qualification String?
   joinedAt      DateTime?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   memberships       Membership[]
   markedSessions    AttendanceSession[]
@@ -29,12 +29,15 @@ model Profile {
   classHeadFor      ClassGroup[]        @relation("ClassHead")
   sectionTeacherFor Class[]             @relation("SectionTeacher")
   teacherSubjects   TeacherSubject[]
+  timetableSlots    TimetableSlot[]
+  homeworkCreated   Homework[]
+  noticesAuthored   Notice[]
 
   @@map("profiles")
 }
 
 model TeacherSubject {
-  id        String  @id @default(cuid())
+  id        String @id @default(cuid())
   profileId String
   subjectId String
 
@@ -117,6 +120,8 @@ model Membership {
   institution Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
 
   @@unique([userId, institutionId])
+  @@index([institutionId, role, revokedAt])
+  @@index([userId, revokedAt])
   @@map("memberships")
 }
 
@@ -143,6 +148,7 @@ model Invitation {
 
   institution Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
 
+  @@index([institutionId, email, acceptedAt, expiresAt])
   @@map("invitations")
 }
 
@@ -224,7 +230,11 @@ model Class {
   exams           Exam[]
   timetableSlots  TimetableSlot[]
   homework        Homework[]
+  notices         Notice[]
 
+  @@index([institutionId, academicYearId])
+  @@index([institutionId, sectionTeacherId])
+  @@index([institutionId, classGroupId])
   @@map("classes")
 }
 
@@ -251,6 +261,7 @@ model Student {
   feeAdjustments           FeeAdjustment[]
   leads                    Lead[]             @relation("ConvertedStudent")
   examResults              ExamResult[]
+  noticeReads              NoticeRead[]
   classGroupLeaderFor      ClassGroup[]       @relation("ClassGroupLeader")
   classGroupGirlsLeaderFor ClassGroup[]       @relation("ClassGroupGirlsLeader")
   classGroupBoysLeaderFor  ClassGroup[]       @relation("ClassGroupBoysLeader")
@@ -258,6 +269,7 @@ model Student {
   sectionGirlsLeaderFor    Class[]            @relation("SectionGirlsLeader")
   sectionBoysLeaderFor     Class[]            @relation("SectionBoysLeader")
 
+  @@index([institutionId, classId, status])
   @@map("students")
 }
 
@@ -283,6 +295,7 @@ model Guardian {
   institution Institution       @relation(fields: [institutionId], references: [id], onDelete: Cascade)
   students    StudentGuardian[]
 
+  @@index([institutionId, phone])
   @@map("guardians")
 }
 
@@ -342,6 +355,7 @@ model AttendanceSession {
   records     AttendanceRecord[]
 
   @@unique([classId, sessionDate, sessionLabel])
+  @@index([institutionId, sessionDate])
   @@map("attendance_sessions")
 }
 
@@ -398,7 +412,7 @@ model FeePlanComponent {
   id         String   @id @default(cuid())
   planId     String
   name       String
-  amount     Int      // paise
+  amount     Int // paise
   isOptional Boolean  @default(false)
   order      Int      @default(0)
   createdAt  DateTime @default(now())
@@ -525,6 +539,8 @@ model Lead {
   institution      Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
   convertedStudent Student?    @relation("ConvertedStudent", fields: [convertedToStudentId], references: [id])
 
+  @@index([institutionId, stage, nextFollowupAt])
+  @@index([institutionId, phone])
   @@map("leads")
 }
 
@@ -599,6 +615,8 @@ model Message {
   institution Institution      @relation(fields: [institutionId], references: [id], onDelete: Cascade)
   template    MessageTemplate? @relation(fields: [templateId], references: [id])
 
+  @@index([institutionId, status, createdAt])
+  @@index([institutionId, recipientPhone, createdAt])
   @@map("messages")
 }
 
@@ -633,7 +651,10 @@ model Subject {
   class           Class?           @relation(fields: [classId], references: [id])
   examResults     ExamResult[]
   teacherSubjects TeacherSubject[]
+  timetableSlots  TimetableSlot[]
+  homework        Homework[]
 
+  @@index([institutionId, classId, name])
   @@map("subjects")
 }
 
@@ -653,6 +674,7 @@ model Exam {
   class       Class?       @relation(fields: [classId], references: [id])
   results     ExamResult[]
 
+  @@index([institutionId, classId, examDate])
   @@map("exams")
 }
 
@@ -674,6 +696,8 @@ model ExamResult {
   subject     Subject     @relation(fields: [subjectId], references: [id], onDelete: Cascade)
 
   @@unique([examId, studentId, subjectId])
+  @@index([institutionId, studentId])
+  @@index([institutionId, subjectId])
   @@map("exam_results")
 }
 
@@ -694,7 +718,12 @@ model TimetableSlot {
 
   institution Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
   class       Class       @relation(fields: [classId], references: [id], onDelete: Cascade)
+  subject     Subject?    @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  teacher     Profile?    @relation(fields: [teacherId], references: [id], onDelete: SetNull)
 
+  @@unique([classId, dayOfWeek, startTime])
+  @@index([institutionId, classId, dayOfWeek])
+  @@index([teacherId, dayOfWeek])
   @@map("timetable_slots")
 }
 
@@ -703,22 +732,26 @@ model TimetableSlot {
 // ─────────────────────────────────────────────
 
 model Homework {
-  id              String    @id @default(cuid())
-  institutionId   String
-  classId         String
-  subjectId       String?
-  teacherId       String
-  title           String
-  description     String?
-  dueDate         DateTime?
-  attachmentUrl   String?
-  attachmentMime  String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id             String    @id @default(cuid())
+  institutionId  String
+  classId        String
+  subjectId      String?
+  teacherId      String
+  title          String
+  description    String?
+  dueDate        DateTime?
+  attachmentUrl  String?
+  attachmentMime String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   institution Institution @relation(fields: [institutionId], references: [id], onDelete: Cascade)
   class       Class       @relation(fields: [classId], references: [id], onDelete: Cascade)
+  subject     Subject?    @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  teacher     Profile     @relation(fields: [teacherId], references: [id], onDelete: Restrict)
 
+  @@index([institutionId, classId, dueDate])
+  @@index([institutionId, createdAt])
   @@map("homework")
 }
 
@@ -741,8 +774,12 @@ model Notice {
   updatedAt     DateTime       @updatedAt
 
   institution Institution  @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  author      Profile      @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  class       Class?       @relation(fields: [classId], references: [id], onDelete: SetNull)
   reads       NoticeRead[]
 
+  @@index([institutionId, audience, publishedAt])
+  @@index([institutionId, classId, publishedAt])
   @@map("notices")
 }
 
@@ -752,7 +789,8 @@ model NoticeRead {
   studentId String
   readAt    DateTime @default(now())
 
-  notice Notice @relation(fields: [noticeId], references: [id], onDelete: Cascade)
+  notice  Notice  @relation(fields: [noticeId], references: [id], onDelete: Cascade)
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@unique([noticeId, studentId])
   @@index([studentId])
@@ -834,6 +872,7 @@ model AuditLog {
 
   @@index([institutionId, createdAt])
   @@index([actorUserId])
+  @@index([institutionId, action, createdAt])
   @@map("audit_logs")
 }
 

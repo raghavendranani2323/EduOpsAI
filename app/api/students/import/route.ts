@@ -7,6 +7,11 @@ import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { requestIdFrom } from "@/lib/observability/request";
 import { logServer } from "@/lib/observability/logger";
 import { writeAuditEvent } from "@/lib/audit/server";
+import {
+  assertAdmissionNoAvailable,
+  assertStudentClass,
+  normalizeAdmissionNo,
+} from "@/lib/data-integrity/validation";
 
 const importSchema = z.object({
   students: z.array(z.object({
@@ -47,11 +52,16 @@ export async function POST(req: Request) {
     for (const row of rows) {
       try {
         await withRls(user.id, async (tx) => {
+          const admissionNo = normalizeAdmissionNo(row.admissionNo);
+          await Promise.all([
+            assertAdmissionNoAvailable(tx, institution.id, admissionNo),
+            assertStudentClass(tx, institution.id, row.classId),
+          ]);
           const student = await tx.student.create({
             data: {
               institutionId: institution.id,
               fullName:      row.fullName.trim(),
-              admissionNo:   row.admissionNo?.trim() || null,
+              admissionNo,
               gender:        (["MALE", "FEMALE", "OTHER"].includes(row.gender ?? "")) ? row.gender as "MALE" | "FEMALE" | "OTHER" : null,
               classId:       row.classId || null,
             },

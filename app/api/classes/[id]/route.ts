@@ -12,7 +12,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const body = await req.json() as {
       name?: string;
       section?: string;
-      academicYear?: string;
       medium?: string | null;
       sectionTeacherId?: string | null;
       sectionLeaderId?: string | null;
@@ -46,7 +45,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         data: {
           ...(body.name ? { name: body.name.trim() } : {}),
           ...(body.section !== undefined ? { section: body.section?.trim() || null } : {}),
-          ...(body.academicYear ? { academicYear: body.academicYear.trim() } : {}),
           ...(body.medium !== undefined ? { medium: body.medium?.trim() || null } : {}),
           ...(body.sectionTeacherId !== undefined ? { sectionTeacherId: body.sectionTeacherId || null } : {}),
           ...(body.sectionLeaderId !== undefined ? { sectionLeaderId: body.sectionLeaderId || null } : {}),
@@ -72,6 +70,19 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
 
     // Unassign students before deleting the class
     await withRls(user.id, async (tx) => {
+      const [attendanceCount, homeworkCount, examCount, noticeCount] = await Promise.all([
+        tx.attendanceSession.count({ where: { classId: id, institutionId: institution.id } }),
+        tx.homework.count({ where: { classId: id, institutionId: institution.id } }),
+        tx.exam.count({ where: { classId: id, institutionId: institution.id } }),
+        tx.notice.count({ where: { classId: id, institutionId: institution.id } }),
+      ]);
+      if (attendanceCount || homeworkCount || examCount || noticeCount) {
+        throw new ApiError(
+          409,
+          "CLASS_HAS_HISTORY",
+          "Archive or retain classes that have attendance, homework, exams, or notices",
+        );
+      }
       await tx.student.updateMany({
         where: { classId: id, institutionId: institution.id },
         data: { classId: null },

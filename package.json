@@ -15,6 +15,7 @@
     "test:phase1": "tsx scripts/phase1-security-tests.ts",
     "test:api-foundations": "tsx scripts/api-foundation-tests.ts",
     "test:permissions": "tsx scripts/permission-matrix-tests.ts",
+    "test:data-integrity": "tsx scripts/data-integrity-tests.ts",
     "test:migrations": "node scripts/verify-phase1-migrations.mjs",
     "db:reset": "node -e \"require('dotenv/config'); const {createClient}=require('@supabase/supabase-js'); const c=createClient(process.env.NEXT_PUBLIC_SUPABASE_URL,process.env.SUPABASE_SERVICE_ROLE_KEY,{auth:{persistSession:false}}); c.auth.admin.listUsers().then(({data})=>Promise.all(data.users.map(u=>c.auth.admin.deleteUser(u.id)))).then(()=>console.log('auth users wiped'))\"",
     "rls:apply": "node -e \"require('dotenv/config'); const fs=require('fs'); const sql=fs.readFileSync('prisma/policies/rls.sql','utf8'); fetch('https://api.supabase.com/v1/projects/'+process.env.NEXT_PUBLIC_SUPABASE_URL.match(/\\/\\/(.+?)\\./)[1]+'/database/query',{method:'POST',headers:{Authorization:'Bearer '+process.env.SUPABASE_ACCESS_TOKEN,'Content-Type':'application/json'},body:JSON.stringify({query:sql})}).then(r=>r.text()).then(t=>console.log(t||'OK'))\""

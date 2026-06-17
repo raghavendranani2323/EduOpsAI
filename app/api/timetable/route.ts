@@ -3,6 +3,8 @@ import { requireApiInstitution } from "@/lib/api/auth";
 import { withRls } from "@/lib/prisma/rls";
 import { ApiError, errorResponse, serverErrorResponse } from "@/lib/api/errors";
 import { assertClassAccess, assertRole, authorizedClassIds } from "@/lib/auth/permissions";
+import { assertTimetableReferencesAndAvailability } from "@/lib/data-integrity/validation";
+import { writeAuditEvent } from "@/lib/audit/server";
 
 export async function GET(req: NextRequest) {
   try {
@@ -47,13 +49,23 @@ export async function POST(req: NextRequest) {
     }
 
     const slot = await withRls(user.id, async (tx) => {
+      const normalizedDay = Number(dayOfWeek);
+      await assertTimetableReferencesAndAvailability(tx, {
+        institutionId: institution.id,
+        classId,
+        subjectId: subjectId || null,
+        teacherId: teacherId || null,
+        dayOfWeek: normalizedDay,
+        startTime,
+        endTime,
+      });
       return tx.timetableSlot.create({
         data: {
           institutionId: institution.id,
           classId,
           subjectId: subjectId || null,
           teacherId: teacherId || null,
-          dayOfWeek: Number(dayOfWeek),
+          dayOfWeek: normalizedDay,
           startTime,
           endTime,
           label: label || null,
@@ -61,6 +73,14 @@ export async function POST(req: NextRequest) {
       });
     });
 
+    await writeAuditEvent({
+      actorUserId: user.id,
+      institutionId: institution.id,
+      action: "timetable.create",
+      targetId: slot.id,
+      outcome: "success",
+      meta: { classId: slot.classId, dayOfWeek: slot.dayOfWeek },
+    });
     return NextResponse.json({ ok: true, slot });
   } catch (err) {
     if (err instanceof ApiError) return errorResponse(err);

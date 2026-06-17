@@ -4,6 +4,12 @@ import { requireApiInstitution } from "@/lib/api/auth";
 import { withRls } from "@/lib/prisma/rls";
 import { ApiError, errorResponse, serverErrorResponse } from "@/lib/api/errors";
 import { assertRole } from "@/lib/auth/permissions";
+import {
+  assertAdmissionNoAvailable,
+  assertStudentClass,
+  normalizeAdmissionNo,
+} from "@/lib/data-integrity/validation";
+import { writeAuditEvent } from "@/lib/audit/server";
 
 const studentSchema = z.object({
   fullName:    z.string().min(1, "Full name is required").max(200),
@@ -92,11 +98,16 @@ export async function POST(req: Request) {
     const body = parsed.data;
 
     const student = await withRls(user.id, async (tx) => {
+      const admissionNo = normalizeAdmissionNo(body.admissionNo);
+      await Promise.all([
+        assertAdmissionNoAvailable(tx, institution.id, admissionNo),
+        assertStudentClass(tx, institution.id, body.classId),
+      ]);
       const s = await tx.student.create({
         data: {
           institutionId: institution.id,
           fullName: body.fullName.trim(),
-          admissionNo: body.admissionNo?.trim() || null,
+          admissionNo,
           gender: body.gender ?? null,
           dob: body.dob ? new Date(body.dob) : null,
           classId: body.classId || null,
@@ -131,6 +142,14 @@ export async function POST(req: Request) {
       return s;
     });
 
+    await writeAuditEvent({
+      actorUserId: user.id,
+      institutionId: institution.id,
+      action: "student.create",
+      targetId: student.id,
+      outcome: "success",
+      meta: { hasAdmissionNo: Boolean(student.admissionNo), classId: student.classId },
+    });
     return NextResponse.json({ ok: true, student }, { status: 201 });
   } catch (err) {
     if (err instanceof ApiError) return errorResponse(err);

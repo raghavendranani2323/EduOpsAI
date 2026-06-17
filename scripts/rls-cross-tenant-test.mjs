@@ -40,6 +40,8 @@ const userA = randomUUID();
 const userB = randomUUID();
 const instA = cid("instA");
 const instB = cid("instB");
+const academicYearA = cid("academicYearA");
+const academicYearB = cid("academicYearB");
 const classA = cid("classA");
 const classB = cid("classB");
 const studentA = cid("studentA");
@@ -76,11 +78,16 @@ async function seed(sup) {
     ($4, $5, $6, 'OWNER', NOW())`,
     [cid("memA"), userA, instA, cid("memB"), userB, instB]);
 
+  await sup.query(`INSERT INTO academic_years (id, "institutionId", name, "isActive", "updatedAt") VALUES
+    ($1, $2, '2025-26', true, NOW()),
+    ($3, $4, '2025-26', true, NOW())`,
+    [academicYearA, instA, academicYearB, instB]);
+
   // Classes
-  await sup.query(`INSERT INTO classes (id, "institutionId", name, "academicYear", "updatedAt") VALUES
-    ($1, $2, 'Class 1', '2025-26', NOW()),
-    ($3, $4, 'Class 1', '2025-26', NOW())`,
-    [classA, instA, classB, instB]);
+  await sup.query(`INSERT INTO classes (id, "institutionId", name, "academicYearId", "academicYear", "updatedAt") VALUES
+    ($1, $2, 'Class 1', $3, '2025-26', NOW()),
+    ($4, $5, 'Class 1', $6, '2025-26', NOW())`,
+    [classA, instA, academicYearA, classB, instB, academicYearB]);
 
   // Students
   await sup.query(`INSERT INTO students (id, "institutionId", "fullName", "classId", "updatedAt") VALUES

@@ -115,14 +115,19 @@ async function main() {
   `);
   console.log("  ✓ Institution + owner membership");
 
-  // 6. Classes
+  // 6. Academic year + classes
+  const academicYearId = uuid();
+  await mgmt(`
+    INSERT INTO academic_years (id, "institutionId", name, "isActive", "createdAt", "updatedAt")
+    VALUES (${sq(academicYearId)}, ${sq(instId)}, '2025-26', true, now(), now());
+  `);
   const classNames = ["Class 6 A", "Class 6 B", "Class 7 A", "Class 8 A"];
   const classIds   = classNames.map(() => uuid());
   const classRows  = classNames.map((name, i) =>
-    `(${sq(classIds[i])}, ${sq(instId)}, ${sq(name)}, '2025-26', now(), now())`
+    `(${sq(classIds[i])}, ${sq(instId)}, ${sq(name)}, ${sq(academicYearId)}, '2025-26', now(), now())`
   ).join(",\n    ");
   await mgmt(`
-    INSERT INTO classes (id, "institutionId", name, "academicYear", "createdAt", "updatedAt")
+    INSERT INTO classes (id, "institutionId", name, "academicYearId", "academicYear", "createdAt", "updatedAt")
     VALUES ${classRows};
   `);
   console.log(`  ✓ ${classNames.length} classes`);

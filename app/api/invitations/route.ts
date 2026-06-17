@@ -46,6 +46,14 @@ export async function POST(req: NextRequest) {
 
     const email = parsed.data.email.trim().toLowerCase();
     const invitation = await withRls(user.id, async (tx) => {
+      await tx.invitation.deleteMany({
+        where: {
+          institutionId: institution.id,
+          email,
+          acceptedAt: null,
+          expiresAt: { lte: new Date() },
+        },
+      });
       const existingInvite = await tx.invitation.findFirst({
         where: {
           institutionId: institution.id,

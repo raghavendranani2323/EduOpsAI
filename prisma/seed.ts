@@ -85,13 +85,24 @@ async function main() {
   });
   console.log(`  ✓ Institution: ${institution.name}`);
 
-  const academicYear = "2025-26";
+  const academicYear = await prisma.academicYear.create({
+    data: {
+      institutionId: institution.id,
+      name: "2025-26",
+      isActive: true,
+    },
+  });
 
   // 5. Classes
   const classes = await Promise.all(
     ["Class 6 A", "Class 6 B", "Class 7 A", "Class 8 A"].map((name) =>
       prisma.class.create({
-        data: { institutionId: institution.id, name, academicYear },
+        data: {
+          institutionId: institution.id,
+          name,
+          academicYearId: academicYear.id,
+          academicYear: academicYear.name,
+        },
       })
     )
   );
