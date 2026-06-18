@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import type { ParentChild } from "@/lib/parent/children";
 
-export function ChildSwitcher({ children, selectedId }: { children: ParentChild[]; selectedId: string }) {
+export function ChildSwitcher({ childOptions, selectedId }: { childOptions: ParentChild[]; selectedId: string }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
@@ -20,7 +20,7 @@ export function ChildSwitcher({ children, selectedId }: { children: ParentChild[
 
   return (
     <div className="flex gap-2 overflow-x-auto scrollbar-none -mx-1 px-1">
-      {children.map(c => {
+      {childOptions.map(c => {
         const active = c.id === selectedId;
         const initials = c.fullName.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase();
         return (

@@ -22,11 +22,17 @@
 
 import { Client } from "pg";
 import { randomUUID } from "crypto";
+import { existsSync } from "fs";
 
-const SUPER_URL = process.env.RLS_TEST_SUPERUSER_URL
-  ?? "postgresql://postgres.bppouwvjljwjijveavuq:Raghava6556%40@aws-1-ap-southeast-2.pooler.supabase.com:5432/postgres";
-const APP_URL = process.env.RLS_TEST_APP_USER_URL
-  ?? "postgresql://app_user.bppouwvjljwjijveavuq:X9HQmfIYZ2G1Tk5ASaJiuRdV@aws-1-ap-southeast-2.pooler.supabase.com:6543/postgres?pgbouncer=true";
+if (existsSync(".env")) process.loadEnvFile(".env");
+if (existsSync(".env.local")) process.loadEnvFile(".env.local");
+
+const SUPER_URL = process.env.RLS_TEST_SUPERUSER_URL;
+const APP_URL = process.env.RLS_TEST_APP_USER_URL;
+
+if (!SUPER_URL || !APP_URL) {
+  throw new Error("RLS_TEST_SUPERUSER_URL and RLS_TEST_APP_USER_URL are required");
+}
 
 const tag = `rlstest-${Date.now()}`;
 const cid  = (p) => `${tag}-${p}`;
@@ -34,10 +40,16 @@ const userA = randomUUID();
 const userB = randomUUID();
 const instA = cid("instA");
 const instB = cid("instB");
+const academicYearA = cid("academicYearA");
+const academicYearB = cid("academicYearB");
 const classA = cid("classA");
 const classB = cid("classB");
 const studentA = cid("studentA");
 const studentB = cid("studentB");
+const attendanceSessionA = cid("attendanceSessionA");
+const attendanceSessionB = cid("attendanceSessionB");
+const attendanceRecordA = cid("attendanceRecordA");
+const attendanceRecordB = cid("attendanceRecordB");
 const planA = cid("planA");
 const planB = cid("planB");
 const invoiceA = cid("invoiceA");
@@ -66,17 +78,32 @@ async function seed(sup) {
     ($4, $5, $6, 'OWNER', NOW())`,
     [cid("memA"), userA, instA, cid("memB"), userB, instB]);
 
+  await sup.query(`INSERT INTO academic_years (id, "institutionId", name, "isActive", "updatedAt") VALUES
+    ($1, $2, '2025-26', true, NOW()),
+    ($3, $4, '2025-26', true, NOW())`,
+    [academicYearA, instA, academicYearB, instB]);
+
   // Classes
-  await sup.query(`INSERT INTO classes (id, "institutionId", name, "academicYear", "updatedAt") VALUES
-    ($1, $2, 'Class 1', '2025-26', NOW()),
-    ($3, $4, 'Class 1', '2025-26', NOW())`,
-    [classA, instA, classB, instB]);
+  await sup.query(`INSERT INTO classes (id, "institutionId", name, "academicYearId", "academicYear", "updatedAt") VALUES
+    ($1, $2, 'Class 1', $3, '2025-26', NOW()),
+    ($4, $5, 'Class 1', $6, '2025-26', NOW())`,
+    [classA, instA, academicYearA, classB, instB, academicYearB]);
 
   // Students
   await sup.query(`INSERT INTO students (id, "institutionId", "fullName", "classId", "updatedAt") VALUES
     ($1, $2, 'Aarav Sharma', $3, NOW()),
     ($4, $5, 'Bhavya Iyer',  $6, NOW())`,
     [studentA, instA, classA, studentB, instB, classB]);
+
+  await sup.query(`INSERT INTO attendance_sessions (id, "institutionId", "classId", "sessionDate", "markedBy") VALUES
+    ($1, $2, $3, CURRENT_DATE, $4),
+    ($5, $6, $7, CURRENT_DATE, $8)`,
+    [attendanceSessionA, instA, classA, userA, attendanceSessionB, instB, classB, userB]);
+
+  await sup.query(`INSERT INTO attendance_records (id, "sessionId", "studentId", status) VALUES
+    ($1, $2, $3, 'PRESENT'),
+    ($4, $5, $6, 'PRESENT')`,
+    [attendanceRecordA, attendanceSessionA, studentA, attendanceRecordB, attendanceSessionB, studentB]);
 
   // Fee plans + invoices
   await sup.query(`INSERT INTO fee_plans (id, "institutionId", name, amount, cadence, "updatedAt") VALUES
@@ -110,6 +137,7 @@ const ASSERTIONS = [
   { table: "invoices",   col: "institutionId" },
   { table: "notices",    col: "institutionId" },
   { table: "fee_plans",  col: "institutionId" },
+  { table: "attendance_sessions", col: "institutionId" },
 ];
 
 async function runAs(app, userId, expectedInst) {
@@ -157,6 +185,47 @@ async function runWithoutClaims(app) {
   }
 }
 
+async function runAttendanceIntegrity(app) {
+  await app.query("BEGIN");
+  const claims = JSON.stringify({ sub: userA }).replace(/'/g, "''");
+  await app.query(`SET LOCAL request.jwt.claims = '${claims}'`);
+
+  const visible = await app.query(
+    `SELECT COUNT(*)::int AS n
+     FROM attendance_records r
+     JOIN attendance_sessions s ON s.id = r."sessionId"
+     WHERE s."institutionId" IN ($1, $2)`,
+    [instA, instB],
+  );
+  check("user A sees only own attendance record", visible.rows[0].n === 1, `got ${visible.rows[0].n}`);
+
+  const foreignUpdate = await app.query(
+    `UPDATE attendance_sessions SET "sessionLabel" = 'changed' WHERE id = $1`,
+    [attendanceSessionB],
+  );
+  check("user A cannot mutate institution B attendance session", foreignUpdate.rowCount === 0);
+
+  await app.query("SAVEPOINT invalid_attendance_record");
+  try {
+    await app.query(
+      `INSERT INTO attendance_records (id, "sessionId", "studentId", status)
+       VALUES ($1, $2, $3, 'ABSENT')`,
+      [cid("invalidCrossTenantAttendance"), attendanceSessionA, studentB],
+    );
+    check("cross-tenant student cannot be inserted into attendance", false);
+  } catch {
+    await app.query("ROLLBACK TO SAVEPOINT invalid_attendance_record");
+    check("cross-tenant student cannot be inserted into attendance", true);
+  }
+
+  const existing = await app.query(
+    `SELECT COUNT(*)::int AS n FROM attendance_records WHERE id = $1`,
+    [attendanceRecordA],
+  );
+  check("failed attendance insertion preserves existing record", existing.rows[0].n === 1);
+  await app.query("ROLLBACK");
+}
+
 const sup = new Client({ connectionString: SUPER_URL });
 const app = new Client({ connectionString: APP_URL });
 await sup.connect();
@@ -173,6 +242,8 @@ try {
 
   console.log("\n[3] Without any claim — must see 0 rows:");
   await runWithoutClaims(app);
+  console.log("\n[4] Attendance tenant and record integrity:");
+  await runAttendanceIntegrity(app);
 } finally {
   await cleanup(sup);
   await sup.end();

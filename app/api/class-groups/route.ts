@@ -57,7 +57,7 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json({ ok: true, classGroup: group }, { status: 201 });
-  } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Failed" }, { status: 400 });
+  } catch {
+    return NextResponse.json({ ok: false, error: "Class group could not be created" }, { status: 400 });
   }
 }

@@ -103,7 +103,7 @@ export async function POST(req: Request) {
     } catch { /* ignore */ }
 
     return NextResponse.json({ ok: true, academicYear: created }, { status: 201 });
-  } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Failed" }, { status: 400 });
+  } catch {
+    return NextResponse.json({ ok: false, error: "Academic year could not be created" }, { status: 400 });
   }
 }

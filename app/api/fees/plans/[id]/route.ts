@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireInstitution } from "@/lib/tenant/current";
 import { withRls } from "@/lib/prisma/rls";
+import { ApiError, errorResponse, serverErrorResponse } from "@/lib/api/errors";
+import { writeAuditEvent } from "@/lib/audit/server";
 
 const componentSchema = z.object({
   name:       z.string().min(1).max(60),
@@ -68,9 +70,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     });
 
     if (!ok) return NextResponse.json({ ok: false, error: "Not found" }, { status: 404 });
+    await writeAuditEvent({ actorUserId: user.id, institutionId: institution.id, action: "fee.plan.update", targetId: id, outcome: "success" });
     return NextResponse.json({ ok: true });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Failed" }, { status: 500 });
+    if (e instanceof ApiError) return errorResponse(e);
+    return serverErrorResponse("Failed to update fee plan");
   }
 }
 
@@ -84,12 +88,14 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     await withRls(user.id, async (tx) => {
       const linkedInvoices = await tx.invoice.count({ where: { feePlanId: id, institutionId: institution.id } });
       if (linkedInvoices > 0) {
-        throw new Error(`Plan has ${linkedInvoices} invoice${linkedInvoices === 1 ? "" : "s"} — cannot delete`);
+        throw new ApiError(409, "FEE_PLAN_IN_USE", "Fee plans with invoices cannot be deleted");
       }
       await tx.feePlan.deleteMany({ where: { id, institutionId: institution.id } });
     });
+    await writeAuditEvent({ actorUserId: user.id, institutionId: institution.id, action: "fee.plan.delete", targetId: id, outcome: "success" });
     return NextResponse.json({ ok: true });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Forbidden" }, { status: 400 });
+    if (e instanceof ApiError) return errorResponse(e);
+    return serverErrorResponse("Failed to delete fee plan");
   }
 }

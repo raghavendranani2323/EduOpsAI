@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetBody, SheetFooter } from "@/components/ui/sheet";
 import { submitOrQueue } from "@/lib/offline/db";
 import { notifyOfflineQueueChanged } from "@/lib/offline/use-pending-mutations";
+import { useOfflineScope } from "@/lib/offline/scope";
 
 type Status = "PRESENT" | "ABSENT" | "LATE" | "HALF_DAY";
 
@@ -31,6 +32,7 @@ interface Props {
   existingRecords: AttRecord[];
   yesterdayRecords: { studentId: string; status: Status }[];
   isEdit: boolean;
+  expectedUpdatedAt: string | null;
   terminology: Terminology;
 }
 
@@ -58,7 +60,8 @@ const STATUS_CONFIG: Record<Status, { label: string; full: string; color: string
   HALF_DAY: { label: "HD", full: "Half day", color: "text-orange-700 dark:text-orange-300",bg: "bg-orange-100 dark:bg-orange-500/15",icon: MinusCircle  },
 };
 
-export function AttendanceSheet({ classId, date, students, existingRecords, yesterdayRecords, isEdit }: Props) {
+export function AttendanceSheet({ classId, date, students, existingRecords, yesterdayRecords, isEdit, expectedUpdatedAt }: Props) {
+  const offlineScope = useOfflineScope();
   const initial = useMemo<Record<string, Status>>(() => {
     const map: Record<string, Status> = {};
     students.forEach(s => { map[s.id] = "PRESENT"; });
@@ -121,11 +124,12 @@ export function AttendanceSheet({ classId, date, students, existingRecords, yest
   async function submit() {
     setSaving(true);
     const records = students.map(s => ({ studentId: s.id, status: statusMap[s.id] ?? "PRESENT" }));
-    const body = { classId, date, sessionLabel: "morning", records };
+    const body = { classId, date, sessionLabel: "morning", expectedUpdatedAt, records };
 
     const outcome = await submitOrQueue({
       url: "/api/attendance",
       method: "POST",
+      scope: offlineScope,
       body,
       // dedupeKey ensures repeated submissions for same class+date replace each other
       // (last write wins) instead of stacking up in the queue.
@@ -145,7 +149,7 @@ export function AttendanceSheet({ classId, date, students, existingRecords, yest
       setSaved(false);
       notifyOfflineQueueChanged();
       toast.info("Saved offline", {
-        description: "Will sync to the server when you're back online. Safe to close this page.",
+        description: "It will sync while you are signed in. If attendance changes elsewhere, you will be asked to review it.",
         duration: 5000,
       });
       return;
@@ -192,7 +196,7 @@ export function AttendanceSheet({ classId, date, students, existingRecords, yest
       {!isOnline && (
         <div className="bg-amber-500 text-white text-xs font-medium px-4 py-1.5 flex items-center gap-2 animate-fade-in">
           <CloudOff className="h-3.5 w-3.5" />
-          <span>You&apos;re offline. Your submission will be saved on this device and sent when you reconnect.</span>
+          <span>You&apos;re offline. Attendance can be queued on this device and will be conflict-checked when you reconnect.</span>
         </div>
       )}
 
@@ -259,7 +263,7 @@ export function AttendanceSheet({ classId, date, students, existingRecords, yest
                 </div>
                 <span
                   key={status}
-                  className={`animate-status-pop flex items-center gap-1.5 rounded-full px-3 py-1.5 min-w-[64px] justify-center ${cfg.bg} ${cfg.color}`}
+                className={`animate-status-pop flex items-center gap-1.5 rounded-full px-3 py-2 min-w-[64px] min-h-[44px] justify-center ${cfg.bg} ${cfg.color}`}
                 >
                   <Icon className="h-3.5 w-3.5" />
                   <span className="text-xs font-bold">{cfg.label}</span>
@@ -268,7 +272,7 @@ export function AttendanceSheet({ classId, date, students, existingRecords, yest
               <button
                 onClick={() => setPickerStudent(student)}
                 aria-label={`Set status for ${student.fullName}`}
-                className="px-3 flex items-center text-muted-foreground active:bg-muted/60 transition-colors"
+                className="px-3 min-w-[44px] min-h-[44px] flex items-center justify-center text-muted-foreground active:bg-muted/60 transition-colors"
               >
                 <MoreVertical className="h-4 w-4" />
               </button>

@@ -27,6 +27,22 @@ CREATE OR REPLACE FUNCTION has_role(p_institution_id text, VARIADIC p_roles text
   )
 $$ LANGUAGE sql STABLE SECURITY DEFINER;
 
+CREATE OR REPLACE FUNCTION can_access_class(p_class_id text, p_institution_id text) RETURNS boolean AS $$
+  SELECT
+    has_role(p_institution_id, 'OWNER', 'ADMIN')
+    OR EXISTS (
+      SELECT 1
+      FROM classes c
+      LEFT JOIN class_groups cg ON cg.id = c."classGroupId"
+      WHERE c.id = p_class_id
+        AND c."institutionId" = p_institution_id
+        AND (
+          c."sectionTeacherId" = current_user_id()
+          OR cg."classHeadId" = current_user_id()
+        )
+    )
+$$ LANGUAGE sql STABLE SECURITY DEFINER;
+
 -- ── Enable RLS ──────────────────────────────────────────────
 ALTER TABLE institutions          ENABLE ROW LEVEL SECURITY;
 ALTER TABLE memberships           ENABLE ROW LEVEL SECURITY;
@@ -66,13 +82,19 @@ CREATE POLICY inv_insert ON invitations FOR INSERT WITH CHECK (has_role("institu
 CREATE POLICY inv_delete ON invitations FOR DELETE USING (has_role("institutionId", 'OWNER', 'ADMIN'));
 
 -- ── classes ─────────────────────────────────────────────────
-CREATE POLICY cls_select ON classes FOR SELECT USING (is_member("institutionId"));
+CREATE POLICY cls_select ON classes FOR SELECT USING (
+  has_role("institutionId", 'OWNER', 'ADMIN', 'ACCOUNTANT')
+  OR can_access_class(id, "institutionId")
+);
 CREATE POLICY cls_insert ON classes FOR INSERT WITH CHECK (has_role("institutionId", 'OWNER', 'ADMIN'));
 CREATE POLICY cls_update ON classes FOR UPDATE USING (has_role("institutionId", 'OWNER', 'ADMIN')) WITH CHECK (has_role("institutionId", 'OWNER', 'ADMIN'));
 CREATE POLICY cls_delete ON classes FOR DELETE USING (has_role("institutionId", 'OWNER', 'ADMIN'));
 
 -- ── students ────────────────────────────────────────────────
-CREATE POLICY stu_select ON students FOR SELECT USING (is_member("institutionId"));
+CREATE POLICY stu_select ON students FOR SELECT USING (
+  has_role("institutionId", 'OWNER', 'ADMIN', 'ACCOUNTANT')
+  OR ("classId" IS NOT NULL AND can_access_class("classId", "institutionId"))
+);
 CREATE POLICY stu_insert ON students FOR INSERT WITH CHECK (has_role("institutionId", 'OWNER', 'ADMIN'));
 CREATE POLICY stu_update ON students FOR UPDATE USING (has_role("institutionId", 'OWNER', 'ADMIN')) WITH CHECK (has_role("institutionId", 'OWNER', 'ADMIN'));
 CREATE POLICY stu_delete ON students FOR DELETE USING (has_role("institutionId", 'OWNER', 'ADMIN'));
@@ -104,17 +126,51 @@ CREATE POLICY st_delete ON student_tags FOR DELETE
   USING (EXISTS (SELECT 1 FROM students s WHERE s.id = "studentId" AND has_role(s."institutionId", 'OWNER', 'ADMIN')));
 
 -- ── attendance ──────────────────────────────────────────────
-CREATE POLICY att_sess_select ON attendance_sessions FOR SELECT USING (is_member("institutionId"));
-CREATE POLICY att_sess_insert ON attendance_sessions FOR INSERT WITH CHECK (has_role("institutionId", 'OWNER', 'ADMIN', 'TEACHER'));
-CREATE POLICY att_sess_update ON attendance_sessions FOR UPDATE USING (has_role("institutionId", 'OWNER', 'ADMIN', 'TEACHER')) WITH CHECK (has_role("institutionId", 'OWNER', 'ADMIN', 'TEACHER'));
+CREATE POLICY att_sess_select ON attendance_sessions FOR SELECT USING (
+  can_access_class("classId", "institutionId")
+);
+CREATE POLICY att_sess_insert ON attendance_sessions FOR INSERT WITH CHECK (
+  can_access_class(attendance_sessions."classId", "institutionId")
+  AND EXISTS (SELECT 1 FROM classes c WHERE c.id = attendance_sessions."classId" AND c."institutionId" = attendance_sessions."institutionId")
+);
+CREATE POLICY att_sess_update ON attendance_sessions FOR UPDATE
+  USING (can_access_class(attendance_sessions."classId", "institutionId"))
+  WITH CHECK (
+    can_access_class(attendance_sessions."classId", "institutionId")
+    AND EXISTS (
+      SELECT 1 FROM classes c
+      WHERE c.id = attendance_sessions."classId"
+        AND c."institutionId" = attendance_sessions."institutionId"
+    )
+  );
 
 CREATE POLICY att_rec_select ON attendance_records FOR SELECT
   USING (EXISTS (SELECT 1 FROM attendance_sessions s WHERE s.id = "sessionId" AND is_member(s."institutionId")));
 CREATE POLICY att_rec_insert ON attendance_records FOR INSERT
-  WITH CHECK (EXISTS (SELECT 1 FROM attendance_sessions s WHERE s.id = "sessionId" AND has_role(s."institutionId", 'OWNER', 'ADMIN', 'TEACHER')));
+  WITH CHECK (EXISTS (
+    SELECT 1
+    FROM attendance_sessions s
+    JOIN students st ON st.id = attendance_records."studentId"
+    WHERE s.id = attendance_records."sessionId"
+      AND st."institutionId" = s."institutionId"
+      AND st."classId" = s."classId"
+      AND st.status = 'ACTIVE'
+      AND can_access_class(s."classId", s."institutionId")
+  ));
 CREATE POLICY att_rec_update ON attendance_records FOR UPDATE
-  USING (EXISTS (SELECT 1 FROM attendance_sessions s WHERE s.id = "sessionId" AND has_role(s."institutionId", 'OWNER', 'ADMIN', 'TEACHER')))
-  WITH CHECK (EXISTS (SELECT 1 FROM attendance_sessions s WHERE s.id = "sessionId" AND has_role(s."institutionId", 'OWNER', 'ADMIN', 'TEACHER')));
+  USING (EXISTS (SELECT 1 FROM attendance_sessions s WHERE s.id = "sessionId" AND can_access_class(s."classId", s."institutionId")))
+  WITH CHECK (EXISTS (
+    SELECT 1
+    FROM attendance_sessions s
+    JOIN students st ON st.id = attendance_records."studentId"
+    WHERE s.id = attendance_records."sessionId"
+      AND st."institutionId" = s."institutionId"
+      AND st."classId" = s."classId"
+      AND st.status = 'ACTIVE'
+      AND can_access_class(s."classId", s."institutionId")
+  ));
+CREATE POLICY att_rec_delete ON attendance_records FOR DELETE
+  USING (EXISTS (SELECT 1 FROM attendance_sessions s WHERE s.id = attendance_records."sessionId" AND can_access_class(s."classId", s."institutionId")));
 
 -- ── fees ────────────────────────────────────────────────────
 CREATE POLICY fp_select ON fee_plans FOR SELECT USING (is_member("institutionId"));
@@ -144,45 +200,132 @@ CREATE POLICY tmpl_upd ON message_templates FOR UPDATE USING (has_role("institut
 
 CREATE POLICY msg_sel ON messages FOR SELECT USING (is_member("institutionId"));
 CREATE POLICY msg_ins ON messages FOR INSERT WITH CHECK (has_role("institutionId", 'OWNER', 'ADMIN'));
+CREATE POLICY msg_upd ON messages FOR UPDATE USING (has_role("institutionId", 'OWNER', 'ADMIN')) WITH CHECK (has_role("institutionId", 'OWNER', 'ADMIN'));
 
 -- ── PHASE 2 — subjects / exams / exam_results ──────────────
 ALTER TABLE subjects     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE exams        ENABLE ROW LEVEL SECURITY;
 ALTER TABLE exam_results ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY subj_sel ON subjects FOR SELECT USING (is_member("institutionId"));
-CREATE POLICY subj_ins ON subjects FOR INSERT WITH CHECK (has_role("institutionId", 'OWNER', 'ADMIN', 'TEACHER'));
-CREATE POLICY subj_upd ON subjects FOR UPDATE USING (has_role("institutionId", 'OWNER', 'ADMIN', 'TEACHER')) WITH CHECK (has_role("institutionId", 'OWNER', 'ADMIN', 'TEACHER'));
+CREATE POLICY subj_sel ON subjects FOR SELECT USING (
+  has_role("institutionId", 'OWNER', 'ADMIN')
+  OR ("classId" IS NULL AND has_role("institutionId", 'TEACHER'))
+  OR ("classId" IS NOT NULL AND can_access_class("classId", "institutionId"))
+);
+CREATE POLICY subj_ins ON subjects FOR INSERT WITH CHECK (has_role("institutionId", 'OWNER', 'ADMIN'));
+CREATE POLICY subj_upd ON subjects FOR UPDATE USING (has_role("institutionId", 'OWNER', 'ADMIN')) WITH CHECK (has_role("institutionId", 'OWNER', 'ADMIN'));
 CREATE POLICY subj_del ON subjects FOR DELETE USING (has_role("institutionId", 'OWNER', 'ADMIN'));
 
-CREATE POLICY exam_sel ON exams FOR SELECT USING (is_member("institutionId"));
-CREATE POLICY exam_ins ON exams FOR INSERT WITH CHECK (has_role("institutionId", 'OWNER', 'ADMIN', 'TEACHER'));
-CREATE POLICY exam_upd ON exams FOR UPDATE USING (has_role("institutionId", 'OWNER', 'ADMIN', 'TEACHER')) WITH CHECK (has_role("institutionId", 'OWNER', 'ADMIN', 'TEACHER'));
+CREATE POLICY exam_sel ON exams FOR SELECT USING (
+  has_role("institutionId", 'OWNER', 'ADMIN')
+  OR ("classId" IS NOT NULL AND can_access_class("classId", "institutionId"))
+);
+CREATE POLICY exam_ins ON exams FOR INSERT WITH CHECK (has_role("institutionId", 'OWNER', 'ADMIN'));
+CREATE POLICY exam_upd ON exams FOR UPDATE USING (has_role("institutionId", 'OWNER', 'ADMIN')) WITH CHECK (has_role("institutionId", 'OWNER', 'ADMIN'));
 CREATE POLICY exam_del ON exams FOR DELETE USING (has_role("institutionId", 'OWNER', 'ADMIN'));
 
-CREATE POLICY exres_sel ON exam_results FOR SELECT USING (is_member("institutionId"));
-CREATE POLICY exres_ins ON exam_results FOR INSERT WITH CHECK (has_role("institutionId", 'OWNER', 'ADMIN', 'TEACHER'));
-CREATE POLICY exres_upd ON exam_results FOR UPDATE USING (has_role("institutionId", 'OWNER', 'ADMIN', 'TEACHER')) WITH CHECK (has_role("institutionId", 'OWNER', 'ADMIN', 'TEACHER'));
+CREATE POLICY exres_sel ON exam_results FOR SELECT USING (
+  EXISTS (
+    SELECT 1 FROM exams e
+    WHERE e.id = exam_results."examId"
+      AND e."institutionId" = exam_results."institutionId"
+      AND e."classId" IS NOT NULL
+      AND can_access_class(e."classId", e."institutionId")
+  )
+);
+CREATE POLICY exres_ins ON exam_results FOR INSERT WITH CHECK (
+  EXISTS (
+    SELECT 1 FROM exams e
+    WHERE e.id = exam_results."examId"
+      AND e."institutionId" = exam_results."institutionId"
+      AND e."classId" IS NOT NULL
+      AND can_access_class(e."classId", e."institutionId")
+  )
+);
+CREATE POLICY exres_upd ON exam_results FOR UPDATE
+  USING (EXISTS (
+    SELECT 1 FROM exams e
+    WHERE e.id = exam_results."examId"
+      AND e."institutionId" = exam_results."institutionId"
+      AND e."classId" IS NOT NULL
+      AND can_access_class(e."classId", e."institutionId")
+  ))
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM exams e
+    WHERE e.id = exam_results."examId"
+      AND e."institutionId" = exam_results."institutionId"
+      AND e."classId" IS NOT NULL
+      AND can_access_class(e."classId", e."institutionId")
+  ));
 
 -- ── PHASE 2 — timetable ─────────────────────────────────────
 ALTER TABLE timetable_slots ENABLE ROW LEVEL SECURITY;
-CREATE POLICY tt_sel ON timetable_slots FOR SELECT USING (is_member("institutionId"));
+CREATE POLICY tt_sel ON timetable_slots FOR SELECT USING (can_access_class("classId", "institutionId"));
 CREATE POLICY tt_ins ON timetable_slots FOR INSERT WITH CHECK (has_role("institutionId", 'OWNER', 'ADMIN'));
 CREATE POLICY tt_upd ON timetable_slots FOR UPDATE USING (has_role("institutionId", 'OWNER', 'ADMIN')) WITH CHECK (has_role("institutionId", 'OWNER', 'ADMIN'));
 CREATE POLICY tt_del ON timetable_slots FOR DELETE USING (has_role("institutionId", 'OWNER', 'ADMIN'));
 
 -- ── PHASE 2 — homework ──────────────────────────────────────
 ALTER TABLE homework ENABLE ROW LEVEL SECURITY;
-CREATE POLICY hw_sel ON homework FOR SELECT USING (is_member("institutionId"));
-CREATE POLICY hw_ins ON homework FOR INSERT WITH CHECK (has_role("institutionId", 'OWNER', 'ADMIN', 'TEACHER'));
-CREATE POLICY hw_upd ON homework FOR UPDATE USING (has_role("institutionId", 'OWNER', 'ADMIN', 'TEACHER')) WITH CHECK (has_role("institutionId", 'OWNER', 'ADMIN', 'TEACHER'));
-CREATE POLICY hw_del ON homework FOR DELETE USING (has_role("institutionId", 'OWNER', 'ADMIN', 'TEACHER'));
+CREATE POLICY hw_sel ON homework FOR SELECT USING (can_access_class("classId", "institutionId"));
+CREATE POLICY hw_ins ON homework FOR INSERT WITH CHECK (can_access_class("classId", "institutionId"));
+CREATE POLICY hw_upd ON homework FOR UPDATE USING (can_access_class("classId", "institutionId")) WITH CHECK (can_access_class("classId", "institutionId"));
+CREATE POLICY hw_del ON homework FOR DELETE USING (can_access_class("classId", "institutionId"));
 
 -- ── PHASE 2 — notices ───────────────────────────────────────
 ALTER TABLE notices ENABLE ROW LEVEL SECURITY;
-CREATE POLICY nt_sel ON notices FOR SELECT USING (is_member("institutionId"));
-CREATE POLICY nt_ins ON notices FOR INSERT WITH CHECK (has_role("institutionId", 'OWNER', 'ADMIN', 'TEACHER'));
-CREATE POLICY nt_upd ON notices FOR UPDATE USING (has_role("institutionId", 'OWNER', 'ADMIN', 'TEACHER')) WITH CHECK (has_role("institutionId", 'OWNER', 'ADMIN', 'TEACHER'));
+CREATE POLICY nt_sel ON notices FOR SELECT USING (
+  has_role("institutionId", 'OWNER', 'ADMIN')
+  OR (
+    has_role("institutionId", 'TEACHER')
+    AND (
+      audience IN ('ALL', 'TEACHERS')
+      OR (audience = 'CLASS' AND "classId" IS NOT NULL AND can_access_class("classId", "institutionId"))
+    )
+  )
+);
+CREATE POLICY nt_ins ON notices FOR INSERT WITH CHECK (
+  has_role("institutionId", 'OWNER', 'ADMIN')
+  OR (
+    has_role("institutionId", 'TEACHER')
+    AND audience = 'CLASS'
+    AND "classId" IS NOT NULL
+    AND can_access_class("classId", "institutionId")
+    AND "authorId" = current_user_id()
+  )
+);
+CREATE POLICY nt_upd ON notices FOR UPDATE
+  USING (
+    has_role("institutionId", 'OWNER', 'ADMIN')
+    OR (
+      has_role("institutionId", 'TEACHER')
+      AND "authorId" = current_user_id()
+      AND audience = 'CLASS'
+      AND "classId" IS NOT NULL
+      AND can_access_class("classId", "institutionId")
+    )
+  )
+  WITH CHECK (
+    has_role("institutionId", 'OWNER', 'ADMIN')
+    OR (
+      has_role("institutionId", 'TEACHER')
+      AND "authorId" = current_user_id()
+      AND audience = 'CLASS'
+      AND "classId" IS NOT NULL
+      AND can_access_class("classId", "institutionId")
+    )
+  );
+DROP POLICY IF EXISTS nt_del ON notices;
+CREATE POLICY nt_del ON notices FOR DELETE USING (
+  has_role("institutionId", 'OWNER', 'ADMIN')
+  OR (
+    has_role("institutionId", 'TEACHER')
+    AND "authorId" = current_user_id()
+    AND audience = 'CLASS'
+    AND "classId" IS NOT NULL
+    AND can_access_class("classId", "institutionId")
+  )
+);
 CREATE POLICY nt_del ON notices FOR DELETE USING (has_role("institutionId", 'OWNER', 'ADMIN'));
 
 -- ── PHASE 2 — leave_requests ────────────────────────────────

@@ -19,10 +19,13 @@ const COLUMNS = [
     ],
   },
   {
-    title: "Get started",
+    title: "Trust & help",
     links: [
-      { label: "Create institution", href: "/signup" },
-      { label: "Start free trial", href: "/signup" },
+      { label: "Privacy", href: "/privacy" },
+      { label: "Terms", href: "/terms" },
+      { label: "Data rights", href: "/data-rights" },
+      { label: "Support", href: "/support" },
+      { label: "Service status", href: "/status" },
     ],
   },
 ];

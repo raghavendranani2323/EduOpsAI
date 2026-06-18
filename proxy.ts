@@ -1,8 +1,14 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { randomUUID } from "node:crypto";
 
 export async function proxy(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({ request });
+  const requestId = request.headers.get("x-request-id") ?? randomUUID();
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-request-id", requestId);
+  let supabaseResponse = NextResponse.next({
+    request: { headers: requestHeaders },
+  });
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -16,7 +22,9 @@ export async function proxy(request: NextRequest) {
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value)
           );
-          supabaseResponse = NextResponse.next({ request });
+          supabaseResponse = NextResponse.next({
+            request: { headers: requestHeaders },
+          });
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
           );
@@ -33,19 +41,43 @@ export async function proxy(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
   const isAuthRoute = pathname.startsWith("/login") || pathname.startsWith("/signup") || pathname.startsWith("/accept-invite") || pathname.startsWith("/teacher-login");
+  const isApiRoute = pathname.startsWith("/api/");
+  const isPublicApi =
+    pathname.startsWith("/api/auth") ||
+    pathname.startsWith("/api/razorpay") ||
+    pathname === "/api/health" ||
+    pathname === "/api/communications/webhook" ||
+    pathname === "/api/push/send" ||
+    pathname.startsWith("/api/parent");
   const isPublicRoute =
     isAuthRoute ||
     pathname === "/" ||
-    pathname.startsWith("/api/razorpay") ||
-    pathname.startsWith("/api/auth") ||
+    isPublicApi ||
     pathname.startsWith("/onboarding") ||
     pathname.startsWith("/p/") ||
     pathname.startsWith("/api/p/") ||
     pathname.startsWith("/parent") ||
     pathname.startsWith("/api/parent") ||
+    pathname === "/privacy" ||
+    pathname === "/terms" ||
+    pathname === "/data-rights" ||
+    pathname === "/support" ||
+    pathname === "/status" ||
+    pathname === "/robots.txt" ||
+    pathname === "/sitemap.xml" ||
+    pathname === "/opengraph-image" ||
     pathname === "/manifest.json" ||
     pathname === "/sw.js" ||
     pathname === "/offline.html";
+
+  if (!user && isApiRoute && !isPublicApi) {
+    const response = NextResponse.json(
+      { ok: false, error: "Please sign in to continue", code: "AUTH_REQUIRED" },
+      { status: 401 },
+    );
+    response.headers.set("x-request-id", requestId);
+    return response;
+  }
 
   if (!user && !isPublicRoute) {
     const url = request.nextUrl.clone();
@@ -59,6 +91,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  supabaseResponse.headers.set("x-request-id", requestId);
   return supabaseResponse;
 }
 

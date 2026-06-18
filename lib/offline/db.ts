@@ -3,43 +3,64 @@
 import { openDB, type IDBPDatabase } from "idb";
 
 const DB_NAME = "eduops-offline";
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 export interface CacheEntry<T = unknown> {
   key: string;
+  scope: string;
   data: T;
   cachedAt: number;
 }
 
+export type MutationState = "queued" | "conflict" | "failed";
+
 export interface MutationEntry {
   id?: number;
+  scope: string;
   url: string;
   method: string;
   body: unknown;
-  dedupeKey?: string;       // mutations with the same key replace each other (last-write-wins)
+  dedupeKey?: string;
   queuedAt: number;
-  attempts?: number;
-  description?: string;     // human-readable for status UI ("Class 6A attendance · 12 Jun")
+  attempts: number;
+  state: MutationState;
+  description?: string;
+  lastError?: string;
+}
+
+export interface MutationInput {
+  scope: string;
+  url: string;
+  method: string;
+  body: unknown;
+  dedupeKey?: string;
+  description?: string;
 }
 
 let dbPromise: Promise<IDBPDatabase> | null = null;
 
 function getDB(): Promise<IDBPDatabase> {
-  if (typeof window === "undefined") return Promise.reject(new Error("idb only in browser"));
+  if (typeof window === "undefined") return Promise.reject(new Error("IndexedDB is browser-only"));
   if (!dbPromise) {
     dbPromise = openDB(DB_NAME, DB_VERSION, {
-      upgrade(db, oldVersion) {
-        if (!db.objectStoreNames.contains("queries"))   db.createObjectStore("queries",   { keyPath: "key" });
+      upgrade(db, oldVersion, _newVersion, transaction) {
+        if (oldVersion < 3) {
+          if (db.objectStoreNames.contains("queries")) db.deleteObjectStore("queries");
+          if (db.objectStoreNames.contains("mutations")) db.deleteObjectStore("mutations");
+        }
+        if (!db.objectStoreNames.contains("queries")) {
+          const queries = db.createObjectStore("queries", { keyPath: "key" });
+          queries.createIndex("scope", "scope", { unique: false });
+        }
         if (!db.objectStoreNames.contains("mutations")) {
-          const store = db.createObjectStore("mutations", { keyPath: "id", autoIncrement: true });
-          store.createIndex("dedupeKey", "dedupeKey", { unique: false });
-        } else if (oldVersion < 2) {
-          // v1 -> v2: add dedupeKey index on existing store
-          const tx = db.transaction("mutations", "versionchange");
-          const store = tx.objectStore("mutations");
-          if (!store.indexNames.contains("dedupeKey")) {
-            store.createIndex("dedupeKey", "dedupeKey", { unique: false });
-          }
+          const mutations = db.createObjectStore("mutations", { keyPath: "id", autoIncrement: true });
+          mutations.createIndex("scope", "scope", { unique: false });
+          mutations.createIndex("dedupeKey", "dedupeKey", { unique: false });
+          mutations.createIndex("state", "state", { unique: false });
+        } else if (transaction) {
+          const mutations = transaction.objectStore("mutations");
+          if (!mutations.indexNames.contains("scope")) mutations.createIndex("scope", "scope", { unique: false });
+          if (!mutations.indexNames.contains("state")) mutations.createIndex("state", "state", { unique: false });
         }
       },
     });
@@ -47,137 +68,211 @@ function getDB(): Promise<IDBPDatabase> {
   return dbPromise;
 }
 
-export async function cacheSet<T>(key: string, data: T): Promise<void> {
-  try {
-    const db = await getDB();
-    await db.put("queries", { key, data, cachedAt: Date.now() } satisfies CacheEntry<T>);
-  } catch { /* IndexedDB unavailable (private mode) */ }
+function scopedKey(scope: string, key: string) {
+  return `${scope}:${key}`;
 }
 
-export async function cacheGet<T>(key: string, maxAgeMs = 1000 * 60 * 60 * 24): Promise<T | null> {
+export async function cacheSet<T>(scope: string, key: string, data: T): Promise<void> {
   try {
     const db = await getDB();
-    const entry = await db.get("queries", key) as CacheEntry<T> | undefined;
-    if (!entry) return null;
-    if (Date.now() - entry.cachedAt > maxAgeMs) return entry.data;
+    await db.put("queries", {
+      key: scopedKey(scope, key),
+      scope,
+      data,
+      cachedAt: Date.now(),
+    } satisfies CacheEntry<T>);
+  } catch {
+    // IndexedDB may be unavailable in private browsing.
+  }
+}
+
+export async function cacheGet<T>(
+  scope: string,
+  key: string,
+  maxAgeMs = 1000 * 60 * 60,
+): Promise<T | null> {
+  try {
+    const db = await getDB();
+    const storageKey = scopedKey(scope, key);
+    const entry = await db.get("queries", storageKey) as CacheEntry<T> | undefined;
+    if (!entry || entry.scope !== scope) return null;
+    if (Date.now() - entry.cachedAt > maxAgeMs) {
+      await db.delete("queries", storageKey);
+      return null;
+    }
     return entry.data;
   } catch {
     return null;
   }
 }
 
-/**
- * Queue a mutation for later sync. If `dedupeKey` is provided, any existing
- * mutation with the same key is replaced — useful for attendance where the
- * latest submission for a class+date supersedes earlier ones.
- */
-export async function queueMutation(payload: Omit<MutationEntry, "id" | "queuedAt" | "attempts">): Promise<void> {
-  try {
-    const db = await getDB();
-    if (payload.dedupeKey) {
-      const tx = db.transaction("mutations", "readwrite");
-      const idx = tx.store.index("dedupeKey");
-      let cursor = await idx.openCursor(IDBKeyRange.only(payload.dedupeKey));
-      while (cursor) {
-        await cursor.delete();
-        cursor = await cursor.continue();
-      }
-      await tx.store.add({ ...payload, queuedAt: Date.now(), attempts: 0 });
-      await tx.done;
-    } else {
-      await db.add("mutations", { ...payload, queuedAt: Date.now(), attempts: 0 });
+export async function queueMutation(payload: MutationInput): Promise<void> {
+  const db = await getDB();
+  const dedupeKey = payload.dedupeKey ? scopedKey(payload.scope, payload.dedupeKey) : undefined;
+  const tx = db.transaction("mutations", "readwrite");
+  if (dedupeKey) {
+    const idx = tx.store.index("dedupeKey");
+    let cursor = await idx.openCursor(IDBKeyRange.only(dedupeKey));
+    while (cursor) {
+      await cursor.delete();
+      cursor = await cursor.continue();
     }
-  } catch (e) {
-    console.error("[queueMutation] failed", e);
   }
+  await tx.store.add({
+    ...payload,
+    dedupeKey,
+    queuedAt: Date.now(),
+    attempts: 0,
+    state: "queued",
+  } satisfies Omit<MutationEntry, "id">);
+  await tx.done;
 }
 
-export async function getPendingMutations(): Promise<MutationEntry[]> {
+export async function getMutations(scope: string): Promise<MutationEntry[]> {
   try {
     const db = await getDB();
-    return (await db.getAll("mutations")) as MutationEntry[];
+    return await db.getAllFromIndex("mutations", "scope", scope) as MutationEntry[];
   } catch {
     return [];
   }
 }
 
-export async function getPendingCount(): Promise<number> {
+export async function getPendingCount(scope: string): Promise<number> {
+  const entries = await getMutations(scope);
+  return entries.filter((entry) => entry.state === "queued").length;
+}
+
+export async function getProblemCount(scope: string): Promise<number> {
+  const entries = await getMutations(scope);
+  return entries.filter((entry) => entry.state !== "queued").length;
+}
+
+export async function clearOfflineData(scope?: string): Promise<void> {
   try {
     const db = await getDB();
-    return await db.count("mutations");
+    if (!scope) {
+      await Promise.all([db.clear("queries"), db.clear("mutations")]);
+      return;
+    }
+    for (const storeName of ["queries", "mutations"] as const) {
+      const tx = db.transaction(storeName, "readwrite");
+      const index = tx.store.index("scope");
+      let cursor = await index.openCursor(IDBKeyRange.only(scope));
+      while (cursor) {
+        await cursor.delete();
+        cursor = await cursor.continue();
+      }
+      await tx.done;
+    }
   } catch {
-    return 0;
+    // Best-effort privacy cleanup.
   }
 }
 
-export async function flushMutations(): Promise<{ flushed: number; failed: number; remaining: number }> {
+export async function discardMutation(id: number): Promise<void> {
+  const db = await getDB();
+  await db.delete("mutations", id);
+}
+
+export async function retryMutation(id: number): Promise<void> {
+  const db = await getDB();
+  await db.transaction("mutations", "readwrite").store.put({
+    ...(await db.get("mutations", id) as MutationEntry),
+    id,
+    state: "queued",
+    lastError: undefined,
+  });
+}
+
+export async function flushMutations(scope: string): Promise<{
+  flushed: number;
+  failed: number;
+  conflicts: number;
+  remaining: number;
+}> {
   let flushed = 0;
   let failed = 0;
-  try {
-    const db = await getDB();
-    const all = (await db.getAll("mutations")) as MutationEntry[];
-    for (const m of all) {
-      try {
-        const res = await fetch(m.url, {
-          method: m.method,
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(m.body),
+  let conflicts = 0;
+  const db = await getDB();
+  const all = (await getMutations(scope)).filter((entry) => entry.state === "queued");
+
+  for (const mutation of all) {
+    if (mutation.id === undefined) continue;
+    try {
+      const response = await fetch(mutation.url, {
+        method: mutation.method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(mutation.body),
+      });
+      if (response.ok) {
+        await db.delete("mutations", mutation.id);
+        flushed++;
+        continue;
+      }
+      const payload = await response.json().catch(() => ({})) as { error?: string };
+      const attempts = mutation.attempts + 1;
+      if (response.status === 409) {
+        await db.put("mutations", {
+          ...mutation,
+          attempts,
+          state: "conflict",
+          lastError: payload.error ?? "The server record changed while you were offline.",
         });
-        if (res.ok) {
-          if (m.id !== undefined) await db.delete("mutations", m.id);
-          flushed++;
-        } else if (res.status >= 400 && res.status < 500 && res.status !== 408 && res.status !== 429) {
-          // 4xx (except timeout/rate-limit) = client error, never going to succeed; drop it
-          if (m.id !== undefined) await db.delete("mutations", m.id);
-          failed++;
-        } else {
-          failed++;
-        }
-      } catch {
+        conflicts++;
+      } else if (response.status >= 400 && response.status < 500 && response.status !== 408 && response.status !== 429) {
+        await db.put("mutations", {
+          ...mutation,
+          attempts,
+          state: "failed",
+          lastError: payload.error ?? `Request rejected (${response.status})`,
+        });
+        failed++;
+      } else {
+        await db.put("mutations", { ...mutation, attempts, lastError: "Temporary sync failure" });
         failed++;
       }
+    } catch {
+      await db.put("mutations", {
+        ...mutation,
+        attempts: mutation.attempts + 1,
+        lastError: "Network unavailable",
+      });
+      failed++;
     }
-    const remaining = await db.count("mutations");
-    return { flushed, failed, remaining };
-  } catch {
-    return { flushed, failed, remaining: 0 };
   }
+
+  return {
+    flushed,
+    failed,
+    conflicts,
+    remaining: await getPendingCount(scope),
+  };
 }
 
-/**
- * Try fetch first; on network failure or while offline, queue the mutation.
- * Returns { ok: true, queued: false } on direct success, { ok: true, queued: true } if queued,
- * or { ok: false } if the server rejected with a 4xx (validation etc.).
- */
-export async function submitOrQueue(payload: Omit<MutationEntry, "id" | "queuedAt" | "attempts">): Promise<
+export async function submitOrQueue(payload: MutationInput): Promise<
   { ok: true; queued: false; response: unknown } |
   { ok: true; queued: true } |
   { ok: false; error: string; status: number }
 > {
   const isOffline = typeof navigator !== "undefined" && !navigator.onLine;
-
   if (!isOffline) {
     try {
-      const res = await fetch(payload.url, {
+      const response = await fetch(payload.url, {
         method: payload.method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload.body),
       });
-      if (res.ok) {
-        const json = await res.json().catch(() => ({}));
-        return { ok: true, queued: false, response: json };
+      if (response.ok) {
+        return { ok: true, queued: false, response: await response.json().catch(() => ({})) };
       }
-      // Server reachable but rejected — don't queue 4xx (validation failure)
-      if (res.status >= 400 && res.status < 500) {
-        const json = await res.json().catch(() => ({}));
-        return { ok: false, error: json.error ?? `HTTP ${res.status}`, status: res.status };
+      if (response.status >= 400 && response.status < 500) {
+        const json = await response.json().catch(() => ({})) as { error?: string };
+        return { ok: false, error: json.error ?? `HTTP ${response.status}`, status: response.status };
       }
-      // 5xx — fall through to queueing
     } catch {
-      // network failure — fall through to queueing
+      // Queue network failures below.
     }
   }
-
   await queueMutation(payload);
   return { ok: true, queued: true };
 }

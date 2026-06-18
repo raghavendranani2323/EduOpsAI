@@ -1,7 +1,15 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireInstitution } from "@/lib/tenant/current";
+import { requireApiInstitution } from "@/lib/api/auth";
 import { withRls } from "@/lib/prisma/rls";
+import { ApiError, errorResponse, serverErrorResponse } from "@/lib/api/errors";
+import { assertRole } from "@/lib/auth/permissions";
+import {
+  assertAdmissionNoAvailable,
+  assertStudentClass,
+  normalizeAdmissionNo,
+} from "@/lib/data-integrity/validation";
+import { writeAuditEvent } from "@/lib/audit/server";
 
 const studentSchema = z.object({
   fullName:    z.string().min(1, "Full name is required").max(200),
@@ -21,7 +29,7 @@ const PAGE_SIZE = 50;
 
 export async function GET(req: Request) {
   try {
-    const { user, institution, membership } = await requireInstitution();
+    const { user, institution, membership } = await requireApiInstitution();
     const { searchParams } = new URL(req.url);
     const q       = searchParams.get("q")?.trim() ?? "";
     const classId = searchParams.get("classId") ?? "";
@@ -73,14 +81,16 @@ export async function GET(req: Request) {
     const nextCursor = hasMore ? page[page.length - 1].id : null;
 
     return NextResponse.json({ ok: true, students: page, nextCursor });
-  } catch {
-    return NextResponse.json({ ok: false, error: "Unauthorised" }, { status: 401 });
+  } catch (err) {
+    if (err instanceof ApiError) return errorResponse(err);
+    return serverErrorResponse("Failed to load students");
   }
 }
 
 export async function POST(req: Request) {
   try {
-    const { user, institution } = await requireInstitution();
+    const { user, institution, membership } = await requireApiInstitution();
+    assertRole(membership.role, ["OWNER", "ADMIN"], "STUDENT_CREATE_FORBIDDEN", "Only owners and admins can create students");
     const parsed = studentSchema.safeParse(await req.json());
     if (!parsed.success) {
       return NextResponse.json({ ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
@@ -88,11 +98,16 @@ export async function POST(req: Request) {
     const body = parsed.data;
 
     const student = await withRls(user.id, async (tx) => {
+      const admissionNo = normalizeAdmissionNo(body.admissionNo);
+      await Promise.all([
+        assertAdmissionNoAvailable(tx, institution.id, admissionNo),
+        assertStudentClass(tx, institution.id, body.classId),
+      ]);
       const s = await tx.student.create({
         data: {
           institutionId: institution.id,
           fullName: body.fullName.trim(),
-          admissionNo: body.admissionNo?.trim() || null,
+          admissionNo,
           gender: body.gender ?? null,
           dob: body.dob ? new Date(body.dob) : null,
           classId: body.classId || null,
@@ -127,9 +142,17 @@ export async function POST(req: Request) {
       return s;
     });
 
+    await writeAuditEvent({
+      actorUserId: user.id,
+      institutionId: institution.id,
+      action: "student.create",
+      targetId: student.id,
+      outcome: "success",
+      meta: { hasAdmissionNo: Boolean(student.admissionNo), classId: student.classId },
+    });
     return NextResponse.json({ ok: true, student }, { status: 201 });
-  } catch (e) {
-    console.error(e);
-    return NextResponse.json({ ok: false, error: "Failed to create student" }, { status: 500 });
+  } catch (err) {
+    if (err instanceof ApiError) return errorResponse(err);
+    return serverErrorResponse("Failed to create student");
   }
 }

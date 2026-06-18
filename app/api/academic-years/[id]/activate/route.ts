@@ -34,7 +34,7 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
     } catch { /* ignore */ }
 
     return NextResponse.json({ ok: true });
-  } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Failed" }, { status: 400 });
+  } catch {
+    return NextResponse.json({ ok: false, error: "Academic year could not be activated" }, { status: 400 });
   }
 }

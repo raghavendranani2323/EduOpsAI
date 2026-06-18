@@ -4,6 +4,7 @@ import { useState } from "react";
 import { LogOut } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/browser";
+import { clearOfflineData } from "@/lib/offline/db";
 
 export function ParentSignOut({ compact = false, block = false }: { compact?: boolean; block?: boolean }) {
   const [busy, setBusy] = useState(false);
@@ -13,6 +14,7 @@ export function ParentSignOut({ compact = false, block = false }: { compact?: bo
     setBusy(true);
     const supabase = createClient();
     await supabase.auth.signOut();
+    await clearOfflineData();
     router.replace("/parent/login");
     router.refresh();
   }

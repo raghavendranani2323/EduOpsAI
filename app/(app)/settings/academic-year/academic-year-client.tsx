@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -280,14 +281,14 @@ export function AcademicYearClient({ years, studentCount, defaultName, canEdit }
         <Card className="p-4 bg-[var(--surface-1)]">
           <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Next steps</p>
           <div className="grid gap-2 sm:grid-cols-2">
-            <a href="/classes" className="flex items-center justify-between rounded-xl border border-border p-3 hover:bg-muted transition-colors active:scale-[0.99]">
+            <Link href="/classes" className="flex items-center justify-between rounded-xl border border-border p-3 hover:bg-muted transition-colors active:scale-[0.99]">
               <span className="text-sm font-medium">Set up classes for {activeYear.name}</span>
               <ArrowRight className="h-4 w-4 text-muted-foreground" />
-            </a>
-            <a href="/students/new" className="flex items-center justify-between rounded-xl border border-border p-3 hover:bg-muted transition-colors active:scale-[0.99]">
+            </Link>
+            <Link href="/students/new" className="flex items-center justify-between rounded-xl border border-border p-3 hover:bg-muted transition-colors active:scale-[0.99]">
               <span className="text-sm font-medium">Enroll students</span>
               <ArrowRight className="h-4 w-4 text-muted-foreground" />
-            </a>
+            </Link>
           </div>
         </Card>
       )}

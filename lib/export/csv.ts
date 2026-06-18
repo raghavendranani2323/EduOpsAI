@@ -3,17 +3,27 @@
  * with the columns you want in the output — order is preserved from the first
  * record's keys. Values that contain commas, quotes or newlines are quoted.
  */
+const FORMULA_PREFIX = /^[\t\r]*[=+\-@]/;
+
+export function neutralizeCsvFormula(value: string): string {
+  const trimmedStart = value.trimStart();
+  if (FORMULA_PREFIX.test(value) || /^[=+\-@]/.test(trimmedStart)) {
+    return `'${value}`;
+  }
+  return value;
+}
+
 function csvEscape(value: unknown): string {
   if (value === null || value === undefined) return "";
-  const s = String(value);
+  const s = neutralizeCsvFormula(String(value));
   if (/[",\r\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
   return s;
 }
 
 export function toCSV(rows: Array<Record<string, unknown>>, columns?: string[]): string {
-  if (rows.length === 0) return columns ? columns.join(",") + "\n" : "";
+  if (rows.length === 0) return columns ? columns.map(csvEscape).join(",") + "\n" : "";
   const cols = columns ?? Object.keys(rows[0]);
-  const header = cols.join(",");
+  const header = cols.map(csvEscape).join(",");
   const body = rows.map(r => cols.map(c => csvEscape(r[c])).join(",")).join("\n");
   return `${header}\n${body}\n`;
 }

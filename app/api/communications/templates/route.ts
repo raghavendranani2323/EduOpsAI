@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { requireInstitution } from "@/lib/tenant/current";
 import { withRls } from "@/lib/prisma/rls";
+import { ApiError, errorResponse, serverErrorResponse } from "@/lib/api/errors";
+import { writeAuditEvent } from "@/lib/audit/server";
 
-export async function GET(req: Request) {
+export async function GET() {
   try {
     const { user, institution, membership } = await requireInstitution();
     if (membership.role === "TEACHER") return NextResponse.json({ ok: false, error: "Not available for teacher accounts" }, { status: 403 });
@@ -41,8 +43,16 @@ export async function POST(req: Request) {
       })
     );
 
+    await writeAuditEvent({
+      actorUserId: user.id,
+      institutionId: institution.id,
+      action: "communications.template.create",
+      targetId: template.id,
+      outcome: "success",
+    });
     return NextResponse.json({ ok: true, template });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: String(e) }, { status: 500 });
+    if (e instanceof ApiError) return errorResponse(e);
+    return serverErrorResponse("Failed to create template");
   }
 }

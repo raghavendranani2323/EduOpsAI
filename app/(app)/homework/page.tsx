@@ -3,6 +3,7 @@ import { withRls } from "@/lib/prisma/rls";
 import { HomeworkClient } from "./homework-client";
 import type { Homework } from "@prisma/client";
 import { getTeacherClassIds } from "@/lib/tenant/teacher-scope";
+import { createHomeworkSignedUrl } from "@/lib/homework/attachments";
 
 export default async function HomeworkPage() {
   const { user, institution, membership } = await requireInstitution();
@@ -55,5 +56,11 @@ export default async function HomeworkPage() {
     };
   });
 
-  return <HomeworkClient homework={homework} classes={classes} subjects={subjects} scopedToTeacher={scopedToTeacher} />;
+  const signedHomework = await Promise.all(homework.map(async (h) => ({
+    ...h,
+    attachmentObjectKey: h.attachmentUrl,
+    attachmentUrl: await createHomeworkSignedUrl(h.attachmentUrl),
+  })));
+
+  return <HomeworkClient homework={signedHomework} classes={classes} subjects={subjects} scopedToTeacher={scopedToTeacher} />;
 }

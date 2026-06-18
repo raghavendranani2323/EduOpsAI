@@ -7,6 +7,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetBody } from "@/compo
 import { createClient } from "@/lib/supabase/browser";
 import { useRouter } from "next/navigation";
 import { useI18n } from "@/components/i18n/provider";
+import { clearOfflineData } from "@/lib/offline/db";
 
 interface TopBarProps {
   institutionName: string;
@@ -37,6 +38,7 @@ export function TopBar({ institutionName, userEmail, role }: TopBarProps) {
   async function signOut() {
     const supabase = createClient();
     await supabase.auth.signOut();
+    await clearOfflineData();
     router.push("/login");
     router.refresh();
   }

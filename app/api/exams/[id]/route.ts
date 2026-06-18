@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
-import { requireInstitution } from "@/lib/tenant/current";
+import { requireApiInstitution } from "@/lib/api/auth";
 import { withRls } from "@/lib/prisma/rls";
+import { ApiError, errorResponse, serverErrorResponse } from "@/lib/api/errors";
+import { assertRole } from "@/lib/auth/permissions";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { user, institution } = await requireInstitution();
+    const { user, institution, membership } = await requireApiInstitution();
+    assertRole(membership.role, ["OWNER", "ADMIN"], "EXAM_UPDATE_FORBIDDEN", "Only owners and admins can update exams");
     const { id } = await params;
     const body = await req.json() as Record<string, unknown>;
 
@@ -21,20 +24,23 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     );
     if (count.count === 0) return NextResponse.json({ ok: false, error: "Not found" }, { status: 404 });
     return NextResponse.json({ ok: true });
-  } catch (e) {
-    return NextResponse.json({ ok: false, error: String(e) }, { status: 500 });
+  } catch (err) {
+    if (err instanceof ApiError) return errorResponse(err);
+    return serverErrorResponse("Failed to update exam");
   }
 }
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { user, institution } = await requireInstitution();
+    const { user, institution, membership } = await requireApiInstitution();
+    assertRole(membership.role, ["OWNER", "ADMIN"], "EXAM_DELETE_FORBIDDEN", "Only owners and admins can delete exams");
     const { id } = await params;
     await withRls(user.id, (tx) =>
       tx.exam.deleteMany({ where: { id, institutionId: institution.id } })
     );
     return NextResponse.json({ ok: true });
-  } catch (e) {
-    return NextResponse.json({ ok: false, error: String(e) }, { status: 500 });
+  } catch (err) {
+    if (err instanceof ApiError) return errorResponse(err);
+    return serverErrorResponse("Failed to delete exam");
   }
 }

@@ -1,28 +1,44 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireInstitution } from "@/lib/tenant/current";
+import { requireApiInstitution } from "@/lib/api/auth";
 import { withRls } from "@/lib/prisma/rls";
+import { ApiError, errorResponse, serverErrorResponse } from "@/lib/api/errors";
+import { assertClassAccess, assertRole, authorizedClassIds } from "@/lib/auth/permissions";
+import { writeAuditEvent } from "@/lib/audit/server";
 
 export async function GET(req: NextRequest) {
   try {
-    const { user, institution } = await requireInstitution();
+    const { user, institution, membership } = await requireApiInstitution();
 
     const notices = await withRls(user.id, async (tx) => {
+      const ids = await authorizedClassIds(tx, user.id, institution.id, membership.role);
       return tx.notice.findMany({
-        where: { institutionId: institution.id },
+        where: {
+          institutionId: institution.id,
+          ...(ids !== null
+            ? {
+                OR: [
+                  { audience: "ALL" },
+                  { audience: "TEACHERS" },
+                  { audience: "CLASS", classId: { in: ids.length ? ids : ["__none__"] } },
+                ],
+              }
+            : {}),
+        },
         orderBy: [{ pinned: "desc" }, { publishedAt: "desc" }],
         take: 50,
       });
     });
 
     return NextResponse.json({ ok: true, notices });
-  } catch {
-    return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  } catch (err) {
+    if (err instanceof ApiError) return errorResponse(err);
+    return serverErrorResponse("Failed to load notices");
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const { user, institution } = await requireInstitution();
+    const { user, institution, membership } = await requireApiInstitution();
     const body = await req.json();
     const { title, body: noticeBody, audience, classId, pinned, expiresAt } = body;
 
@@ -31,6 +47,27 @@ export async function POST(req: NextRequest) {
     }
 
     const notice = await withRls(user.id, async (tx) => {
+      if (membership.role === "TEACHER") {
+        if (audience !== "CLASS" || !classId) {
+          throw new ApiError(403, "NOTICE_CREATE_FORBIDDEN", "Teachers can publish notices only to assigned classes");
+        }
+        await assertClassAccess(tx, {
+          userId: user.id,
+          institutionId: institution.id,
+          role: membership.role,
+          classId,
+        });
+      } else {
+        assertRole(membership.role, ["OWNER", "ADMIN"], "NOTICE_CREATE_FORBIDDEN", "You cannot publish notices");
+        if (classId) {
+          await assertClassAccess(tx, {
+            userId: user.id,
+            institutionId: institution.id,
+            role: membership.role,
+            classId,
+          });
+        }
+      }
       return tx.notice.create({
         data: {
           institutionId: institution.id,
@@ -45,8 +82,17 @@ export async function POST(req: NextRequest) {
       });
     });
 
+    await writeAuditEvent({
+      actorUserId: user.id,
+      institutionId: institution.id,
+      action: "notice.create",
+      targetId: notice.id,
+      outcome: "success",
+      meta: { audience: notice.audience, classId: notice.classId },
+    });
     return NextResponse.json({ ok: true, notice });
-  } catch {
-    return NextResponse.json({ ok: false, error: "Failed to create notice" }, { status: 500 });
+  } catch (err) {
+    if (err instanceof ApiError) return errorResponse(err);
+    return serverErrorResponse("Failed to create notice");
   }
 }

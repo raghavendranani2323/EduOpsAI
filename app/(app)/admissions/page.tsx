@@ -3,17 +3,17 @@ import { requireInstitution } from "@/lib/tenant/current";
 import { withRls } from "@/lib/prisma/rls";
 import { AdmissionsClient } from "./admissions-client";
 import { todayIST } from "@/lib/format/date";
-import type { Lead } from "@prisma/client";
 
 export default async function AdmissionsPage() {
   const { user, institution, membership } = await requireInstitution();
   if (membership.role === "TEACHER") redirect("/dashboard");
   const today = new Date(todayIST());
 
-  const { leads, classes, dueTodayCount } = await withRls(user.id, async (tx) => {
-    const [leads, classes] = await Promise.all([
+  const { leads, classes, owners, dueTodayCount } = await withRls(user.id, async (tx) => {
+    const [leads, classes, owners] = await Promise.all([
       tx.lead.findMany({
         where: { institutionId: institution.id },
+        include: { assignedTo: { select: { id: true, fullName: true } } },
         orderBy: [{ nextFollowupAt: "asc" }, { createdAt: "desc" }],
       }),
       tx.class.findMany({
@@ -21,9 +21,18 @@ export default async function AdmissionsPage() {
         orderBy: { name: "asc" },
         select: { id: true, name: true },
       }),
+      tx.membership.findMany({
+        where: {
+          institutionId: institution.id,
+          revokedAt: null,
+          role: { in: ["OWNER", "ADMIN"] },
+        },
+        select: { user: { select: { id: true, fullName: true } } },
+        orderBy: { user: { fullName: "asc" } },
+      }),
     ]);
 
-    const dueTodayCount = leads.filter((l: Lead) =>
+    const dueTodayCount = leads.filter((l) =>
       l.nextFollowupAt &&
       l.stage !== "CONVERTED" &&
       l.stage !== "LOST" &&
@@ -31,7 +40,7 @@ export default async function AdmissionsPage() {
     ).length;
 
     return {
-      leads: leads.map((l: Lead) => ({
+      leads: leads.map((l) => ({
         id:               l.id,
         studentName:      l.studentName,
         guardianName:     l.guardianName,
@@ -42,13 +51,18 @@ export default async function AdmissionsPage() {
         stage:            l.stage as string,
         nextFollowupAt:   l.nextFollowupAt?.toISOString().split("T")[0] ?? null,
         lastNote:         l.lastNote,
+        assignedToId:     l.assignedToId,
+        assignedToName:   l.assignedTo?.fullName ?? null,
+        lostReason:       l.lostReason,
         convertedToStudentId: l.convertedToStudentId,
+        convertedAt:      l.convertedAt?.toISOString() ?? null,
         createdAt:        l.createdAt.toISOString().split("T")[0],
       })),
       classes,
+      owners: owners.map((membership) => membership.user),
       dueTodayCount,
     };
   });
 
-  return <AdmissionsClient leads={leads} classes={classes} dueTodayCount={dueTodayCount} />;
+  return <AdmissionsClient leads={leads} classes={classes} owners={owners} dueTodayCount={dueTodayCount} />;
 }

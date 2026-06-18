@@ -16,8 +16,8 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { useDroppable, useDraggable } from "@dnd-kit/core";
-import { Phone, Plus, X, ChevronRight, AlertCircle, CheckCircle2 } from "lucide-react";
-import { formatPhone } from "@/lib/format/phone";
+import { Phone, Plus, X, ChevronRight, AlertCircle, CheckCircle2, MessageCircle, History, UserRound } from "lucide-react";
+import { formatPhone, whatsappLink } from "@/lib/format/phone";
 import { todayIST } from "@/lib/format/date";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -33,14 +33,27 @@ export interface Lead {
   stage:            string;
   nextFollowupAt:   string | null;
   lastNote:         string | null;
+  assignedToId:     string | null;
+  assignedToName:   string | null;
+  lostReason:       string | null;
   convertedToStudentId: string | null;
+  convertedAt:      string | null;
   createdAt:        string;
 }
 
 interface Props {
   leads:        Lead[];
   classes:      { id: string; name: string }[];
+  owners:       { id: string; fullName: string }[];
   dueTodayCount: number;
+}
+
+interface Activity {
+  id: string;
+  kind: string;
+  note: string | null;
+  createdAt: string;
+  actor: { fullName: string };
 }
 
 // ─── Constants ──────────────────────────────────────────────────────────────
@@ -77,6 +90,8 @@ const schema = z.object({
   stage:          z.enum(["NEW", "CONTACTED", "DEMO_SCHEDULED", "DEMO_ATTENDED", "CONVERTED", "LOST"]),
   nextFollowupAt: z.string().optional(),
   lastNote:       z.string().optional(),
+  assignedToId:   z.string().optional(),
+  lostReason:     z.string().optional(),
 });
 type FormData = z.infer<typeof schema>;
 
@@ -129,6 +144,11 @@ function LeadCardContent({ lead, today }: { lead: Lead; today: string }) {
 
       {lead.lastNote && (
         <p className="text-xs text-muted-foreground line-clamp-2 italic">&quot;{lead.lastNote}&quot;</p>
+      )}
+      {lead.assignedToName && (
+        <p className="text-xs text-muted-foreground flex items-center gap-1">
+          <UserRound className="h-3 w-3" /> {lead.assignedToName}
+        </p>
       )}
     </>
   );
@@ -194,7 +214,7 @@ function KanbanColumn({
 
 // ─── Main component ──────────────────────────────────────────────────────────
 
-export function AdmissionsClient({ leads: initial, classes, dueTodayCount }: Props) {
+export function AdmissionsClient({ leads: initial, classes, owners, dueTodayCount }: Props) {
   const router = useRouter();
   const today  = todayIST();
 
@@ -207,6 +227,9 @@ export function AdmissionsClient({ leads: initial, classes, dueTodayCount }: Pro
   const [error, setError]         = useState<string | null>(null);
   const [activeId, setActiveId]   = useState<string | null>(null);
   const [mobileStage, setMobileStage] = useState("NEW");
+  const [activities, setActivities]   = useState<Activity[]>([]);
+  const [activityNote, setActivityNote] = useState("");
+  const [showOverdueOnly, setShowOverdueOnly] = useState(false);
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema) as Resolver<FormData>,
@@ -227,13 +250,6 @@ export function AdmissionsClient({ leads: initial, classes, dueTodayCount }: Pro
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } })
   );
 
-  function groupByStage() {
-    const map: Record<string, Lead[]> = {};
-    STAGES.forEach(s => { map[s.id] = []; });
-    leads.forEach(l => { if (map[l.stage]) map[l.stage].push(l); });
-    return map;
-  }
-
   function openCreate() {
     setEditing(null);
     reset({ source: "WALK_IN", priority: "WARM", stage: "NEW", nextFollowupAt: "" });
@@ -253,6 +269,8 @@ export function AdmissionsClient({ leads: initial, classes, dueTodayCount }: Pro
       stage:          lead.stage as FormData["stage"],
       nextFollowupAt: lead.nextFollowupAt ?? "",
       lastNote:       lead.lastNote ?? "",
+      assignedToId:   lead.assignedToId ?? "",
+      lostReason:     lead.lostReason ?? "",
     });
     setOpenForm(true);
     setSelected(null);
@@ -261,10 +279,36 @@ export function AdmissionsClient({ leads: initial, classes, dueTodayCount }: Pro
 
   function closeForm() { setOpenForm(false); setEditing(null); setError(null); }
 
+  async function openLead(lead: Lead) {
+    setSelected(lead);
+    const res = await fetch(`/api/leads/${lead.id}/activities`);
+    const result = await res.json();
+    setActivities(result.ok ? result.activities : []);
+  }
+
+  async function recordActivity(kind: "NOTE" | "CALL" | "WHATSAPP") {
+    if (!selected) return;
+    const res = await fetch(`/api/leads/${selected.id}/activities`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind, note: activityNote || undefined }),
+    });
+    const result = await res.json();
+    if (!result.ok) { setError(result.error); return; }
+    setActivityNote("");
+    await openLead(selected);
+  }
+
   async function onSubmit(data: FormData) {
     setSaving(true);
     setError(null);
-    const payload = { ...data, nextFollowupAt: data.nextFollowupAt || null, lastNote: data.lastNote || null };
+    const payload = {
+      ...data,
+      nextFollowupAt: data.nextFollowupAt || null,
+      lastNote: data.lastNote || null,
+      assignedToId: data.assignedToId || null,
+      lostReason: data.lostReason || null,
+    };
     const url    = editing ? `/api/leads/${editing.id}` : "/api/leads";
     const method = editing ? "PATCH" : "POST";
     const res    = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
@@ -272,7 +316,11 @@ export function AdmissionsClient({ leads: initial, classes, dueTodayCount }: Pro
     if (!result.ok) { setError(result.error); setSaving(false); return; }
 
     if (editing) {
-      setLeads(prev => prev.map(l => l.id === editing.id ? { ...l, ...payload } : l));
+      setLeads(prev => prev.map(l => l.id === editing.id ? {
+        ...l,
+        ...payload,
+        assignedToName: owners.find(owner => owner.id === payload.assignedToId)?.fullName ?? null,
+      } : l));
     } else {
       setLeads(prev => [...prev, { ...result.lead, nextFollowupAt: result.lead.nextFollowupAt?.split("T")[0] ?? null, createdAt: result.lead.createdAt?.split("T")[0] ?? today }]);
     }
@@ -292,12 +340,20 @@ export function AdmissionsClient({ leads: initial, classes, dueTodayCount }: Pro
 
   async function moveStage(lead: Lead, newStage: string) {
     if (lead.stage === newStage || !STAGES.find(s => s.id === newStage)) return;
+    const lostReason = newStage === "LOST"
+      ? prompt("Why was this admission enquiry lost?")?.trim()
+      : undefined;
+    if (newStage === "LOST" && !lostReason) return;
 
     // Optimistic update
-    setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, stage: newStage } : l));
-    setSelected(prev => prev && prev.id === lead.id ? { ...prev, stage: newStage } : prev);
+    setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, stage: newStage, lostReason: lostReason ?? l.lostReason } : l));
+    setSelected(prev => prev && prev.id === lead.id ? { ...prev, stage: newStage, lostReason: lostReason ?? prev.lostReason } : prev);
 
-    const res    = await fetch(`/api/leads/${lead.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ stage: newStage }) });
+    const res    = await fetch(`/api/leads/${lead.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ stage: newStage, ...(lostReason ? { lostReason } : {}) }),
+    });
     const result = await res.json();
     if (!result.ok) {
       // Rollback
@@ -333,7 +389,15 @@ export function AdmissionsClient({ leads: initial, classes, dueTodayCount }: Pro
     router.push(`/students/${result.studentId}`);
   }
 
-  const grouped     = groupByStage();
+  const visibleLeads = showOverdueOnly
+    ? leads.filter((lead) => lead.nextFollowupAt && lead.nextFollowupAt < today && !["CONVERTED", "LOST"].includes(lead.stage))
+    : leads;
+  const grouped = (() => {
+    const map: Record<string, Lead[]> = {};
+    STAGES.forEach(stage => { map[stage.id] = []; });
+    visibleLeads.forEach(lead => { if (map[lead.stage]) map[lead.stage].push(lead); });
+    return map;
+  })();
   const activeLead  = activeId ? leads.find(l => l.id === activeId) : null;
 
   return (
@@ -356,6 +420,13 @@ export function AdmissionsClient({ leads: initial, classes, dueTodayCount }: Pro
           <Plus className="h-4 w-4" /> Add lead
         </button>
       </div>
+      <button
+        type="button"
+        onClick={() => setShowOverdueOnly(value => !value)}
+        className={`min-h-[44px] rounded-xl border px-4 text-sm font-medium ${showOverdueOnly ? "bg-destructive/10 text-destructive border-destructive/30" : "bg-background"}`}
+      >
+        {showOverdueOnly ? "Showing overdue follow-ups" : "Show overdue follow-ups"}
+      </button>
 
       {/* Mobile: stage chips + vertical list (no drag) */}
       <div className="md:hidden space-y-3">
@@ -387,8 +458,8 @@ export function AdmissionsClient({ leads: initial, classes, dueTodayCount }: Pro
               key={lead.id}
               role="button"
               tabIndex={0}
-              onClick={() => setSelected(lead)}
-              onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelected(lead); } }}
+              onClick={() => openLead(lead)}
+              onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openLead(lead); } }}
               className="w-full text-left bg-background border rounded-xl p-3 space-y-2 shadow-sm active:bg-muted/50 transition-colors cursor-pointer"
             >
               <LeadCardContent lead={lead} today={today} />
@@ -414,7 +485,7 @@ export function AdmissionsClient({ leads: initial, classes, dueTodayCount }: Pro
               key={stage.id}
               stage={stage}
               leads={grouped[stage.id] ?? []}
-              onCardClick={setSelected}
+              onCardClick={openLead}
               today={today}
             />
           ))}
@@ -485,12 +556,57 @@ export function AdmissionsClient({ leads: initial, classes, dueTodayCount }: Pro
                   <span className="italic">{selected.lastNote}</span>
                 </div>
               )}
+              {selected.assignedToName && (
+                <div className="flex gap-2">
+                  <span className="text-muted-foreground w-28 shrink-0">Owner</span>
+                  <span>{selected.assignedToName}</span>
+                </div>
+              )}
+              {selected.lostReason && (
+                <div className="flex gap-2">
+                  <span className="text-muted-foreground w-28 shrink-0">Lost reason</span>
+                  <span>{selected.lostReason}</span>
+                </div>
+              )}
               {selected.convertedToStudentId && (
                 <div className="flex items-center gap-2 text-green-700">
                   <CheckCircle2 className="h-4 w-4" />
                   <a href={`/students/${selected.convertedToStudentId}`} className="underline text-sm">View student profile</a>
                 </div>
               )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <a href={`tel:${selected.phone}`} onClick={() => recordActivity("CALL")} className="min-h-[44px] rounded-xl border flex items-center justify-center gap-2 text-sm font-medium">
+                <Phone className="h-4 w-4" /> Call
+              </a>
+              <a
+                href={whatsappLink(selected.phone, `Namaste ${selected.guardianName}, following up about ${selected.studentName}'s admission enquiry.`)}
+                target="_blank"
+                rel="noreferrer"
+                onClick={() => recordActivity("WHATSAPP")}
+                className="min-h-[44px] rounded-xl border flex items-center justify-center gap-2 text-sm font-medium"
+              >
+                <MessageCircle className="h-4 w-4" /> WhatsApp
+              </a>
+            </div>
+
+            <div className="space-y-2 border-t pt-3">
+              <div className="flex items-center gap-2 text-sm font-medium"><History className="h-4 w-4" /> Activity</div>
+              <div className="flex gap-2">
+                <input value={activityNote} onChange={event => setActivityNote(event.target.value)} placeholder="Quick note…" className="flex-1 min-w-0 border rounded-lg px-3 py-2 text-sm" />
+                <button type="button" onClick={() => recordActivity("NOTE")} className="min-h-[44px] px-4 rounded-lg bg-primary text-primary-foreground text-sm font-medium">Add</button>
+              </div>
+              <div className="max-h-36 overflow-y-auto space-y-2">
+                {activities.map(activity => (
+                  <div key={activity.id} className="text-xs border-l-2 pl-2">
+                    <p className="font-medium">{activity.kind.replaceAll("_", " ")} · {activity.actor.fullName}</p>
+                    {activity.note && <p className="text-muted-foreground">{activity.note}</p>}
+                    <p className="text-muted-foreground">{new Date(activity.createdAt).toLocaleString("en-IN")}</p>
+                  </div>
+                ))}
+                {activities.length === 0 && <p className="text-xs text-muted-foreground">No activity recorded yet.</p>}
+              </div>
             </div>
 
             <div className="flex gap-2 pt-1">
@@ -632,6 +748,19 @@ export function AdmissionsClient({ leads: initial, classes, dueTodayCount }: Pro
                   placeholder="Parents want afternoon batch…"
                   className="mt-1 w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none"
                 />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Lead owner</label>
+                  <select {...register("assignedToId")} className="mt-1 w-full border rounded-lg px-3 py-2.5 text-sm bg-background">
+                    <option value="">Unassigned</option>
+                    {owners.map(owner => <option key={owner.id} value={owner.id}>{owner.fullName}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Lost reason</label>
+                  <input {...register("lostReason")} placeholder="Required when lost" className="mt-1 w-full border rounded-lg px-3 py-2.5 text-sm" />
+                </div>
               </div>
 
               {error && <p className="text-destructive text-sm">{error}</p>}

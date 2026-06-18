@@ -1,26 +1,35 @@
 import { NextResponse } from "next/server";
-import { requireInstitution } from "@/lib/tenant/current";
+import { requireApiInstitution } from "@/lib/api/auth";
 import { withRls } from "@/lib/prisma/rls";
+import { ApiError, errorResponse, serverErrorResponse } from "@/lib/api/errors";
+import { assertRole, authorizedClassIds } from "@/lib/auth/permissions";
+import { writeAuditEvent } from "@/lib/audit/server";
 
 export async function GET() {
   try {
-    const { user, institution } = await requireInstitution();
-    const classes = await withRls(user.id, (tx) =>
-      tx.class.findMany({
-        where: { institutionId: institution.id },
+    const { user, institution, membership } = await requireApiInstitution();
+    const classes = await withRls(user.id, async (tx) => {
+      const ids = await authorizedClassIds(tx, user.id, institution.id, membership.role);
+      return tx.class.findMany({
+        where: {
+          institutionId: institution.id,
+          ...(ids !== null ? { id: { in: ids.length ? ids : ["__none__"] } } : {}),
+        },
         include: { _count: { select: { students: { where: { status: "ACTIVE" } } } } },
         orderBy: { name: "asc" },
-      })
-    );
+      });
+    });
     return NextResponse.json({ ok: true, classes });
-  } catch {
-    return NextResponse.json({ ok: false, error: "Unauthorised" }, { status: 401 });
+  } catch (err) {
+    if (err instanceof ApiError) return errorResponse(err);
+    return serverErrorResponse("Failed to load classes");
   }
 }
 
 export async function POST(req: Request) {
   try {
-    const { user, institution } = await requireInstitution();
+    const { user, institution, membership } = await requireApiInstitution();
+    assertRole(membership.role, ["OWNER", "ADMIN"], "CLASS_CREATE_FORBIDDEN", "Only owners and admins can create classes");
     const body = await req.json() as {
       name?: string;
       section?: string;
@@ -94,8 +103,10 @@ export async function POST(req: Request) {
         },
       });
     });
+    await writeAuditEvent({ actorUserId: user.id, institutionId: institution.id, action: "class.create", targetId: cls.id, outcome: "success" });
     return NextResponse.json({ ok: true, class: cls }, { status: 201 });
-  } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Unauthorised" }, { status: 401 });
+  } catch (err) {
+    if (err instanceof ApiError) return errorResponse(err);
+    return serverErrorResponse("Failed to create class");
   }
 }

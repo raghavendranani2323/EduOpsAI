@@ -4,6 +4,8 @@ import { ChevronLeft, Megaphone, Check } from "lucide-react";
 import { randomBytes } from "crypto";
 import { prismaAdmin } from "@/lib/prisma/admin";
 import { formatDate } from "@/lib/format/date";
+import { isParentTokenActive } from "@/lib/parent/access";
+import { InvalidParentLink } from "../../invalid-link";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -15,11 +17,20 @@ export default async function ParentNoticePage({
 }) {
   const { token, noticeId } = await params;
 
-  const student = await prismaAdmin.student.findUnique({
-    where: { portalToken: token },
-    select: { id: true, fullName: true, institutionId: true, classId: true },
+  const student = await prismaAdmin.student.findFirst({
+    where: { portalToken: token, status: "ACTIVE" },
+    select: {
+      id: true,
+      fullName: true,
+      institutionId: true,
+      classId: true,
+      portalToken: true,
+      portalTokenExpiresAt: true,
+      portalTokenRevokedAt: true,
+    },
   });
-  if (!student) notFound();
+  if (!student) return <InvalidParentLink />;
+  if (!isParentTokenActive(student)) return <InvalidParentLink expired />;
 
   const notice = await prismaAdmin.notice.findFirst({
     where: {

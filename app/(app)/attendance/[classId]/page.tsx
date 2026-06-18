@@ -9,6 +9,8 @@ import { AttendanceSheet } from "./attendance-sheet";
 import { AttendanceHistory } from "./attendance-history";
 import { Prisma } from "@prisma/client";
 import type { AttendanceRecord } from "@prisma/client";
+import { requireAttendanceClassAccess } from "@/lib/attendance/access";
+import { parseAttendanceDate } from "@/lib/attendance/validation";
 
 type SessionWithRecords = Prisma.AttendanceSessionGetPayload<{
   include: { records: { select: { status: true } } };
@@ -27,16 +29,21 @@ export default async function AttendanceClassPage({
   const today  = todayIST();
   const date   = sp.date ?? today;
 
-  const { user, institution } = await requireInstitution();
+  const { user, institution, membership } = await requireInstitution();
   const t = getTerminology(institution.type);
+  let sessionDate: Date;
+  try {
+    sessionDate = parseAttendanceDate(date);
+  } catch {
+    notFound();
+  }
 
   const { cls, students, existingSession, existingRecords, yesterdayRecords, history } = await withRls(user.id, async (tx) => {
-    const cls = await tx.class.findFirst({
-      where: { id: classId, institutionId: institution.id },
-    });
+    const cls = await requireAttendanceClassAccess(tx, user.id, institution.id, membership.role, classId)
+      .catch(() => null);
     if (!cls) return { cls: null, students: [], existingSession: null, existingRecords: [], yesterdayRecords: [], history: [] };
 
-    const yesterday = new Date(date);
+    const yesterday = new Date(sessionDate);
     yesterday.setDate(yesterday.getDate() - 1);
 
     const [students, existingSession, yesterdaySession] = await Promise.all([
@@ -47,7 +54,7 @@ export default async function AttendanceClassPage({
         select: { id: true, fullName: true, admissionNo: true, gender: true },
       }),
       tx.attendanceSession.findFirst({
-        where: { classId, sessionDate: new Date(date) },
+        where: { classId, sessionDate },
         include: { records: true },
       }),
       tx.attendanceSession.findFirst({
@@ -57,7 +64,7 @@ export default async function AttendanceClassPage({
     ]);
 
     // History: last 30 days
-    const thirtyDaysAgo = new Date(date);
+    const thirtyDaysAgo = new Date(sessionDate);
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 29);
 
     const historySessions = view === "history"
@@ -65,7 +72,7 @@ export default async function AttendanceClassPage({
           where: {
             classId,
             institutionId: institution.id,
-            sessionDate: { gte: thirtyDaysAgo, lte: new Date(date) },
+            sessionDate: { gte: thirtyDaysAgo, lte: sessionDate },
           },
           include: { records: { select: { status: true } } },
           orderBy: { sessionDate: "desc" },
@@ -97,7 +104,7 @@ export default async function AttendanceClassPage({
     <div className="flex flex-col min-h-[100dvh]">
       {/* Header */}
       <div className="flex items-center gap-3 p-4 border-b bg-background sticky top-0 z-10">
-        <Link href="/attendance" className="p-2 rounded-lg hover:bg-muted min-h-[44px] min-w-[44px] flex items-center justify-center">
+        <Link href="/attendance" aria-label="Back to attendance classes" className="p-2 rounded-lg hover:bg-muted min-h-[44px] min-w-[44px] flex items-center justify-center">
           <ChevronLeft className="h-5 w-5" />
         </Link>
         <div className="flex-1 min-w-0">
@@ -137,6 +144,7 @@ export default async function AttendanceClassPage({
             existingRecords={existingRecords.map((r: AttendanceRecord) => ({ studentId: r.studentId, status: r.status, note: r.note ?? undefined }))}
             yesterdayRecords={yesterdayRecords.map(r => ({ studentId: r.studentId, status: r.status }))}
             isEdit={!!existingSession}
+            expectedUpdatedAt={existingSession?.markedAt.toISOString() ?? null}
             terminology={t}
           />
         )}

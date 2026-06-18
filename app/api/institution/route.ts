@@ -57,7 +57,7 @@ export async function PATCH(req: Request) {
     );
 
     return NextResponse.json({ ok: true });
-  } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Failed" }, { status: 500 });
+  } catch {
+    return NextResponse.json({ ok: false, error: "Institution settings could not be updated" }, { status: 500 });
   }
 }

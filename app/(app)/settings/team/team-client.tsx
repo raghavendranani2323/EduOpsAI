@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Mail, Copy, Check, UserPlus, Zap } from "lucide-react";
+import { Mail, Copy, Check, Trash2, UserPlus, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -19,7 +19,7 @@ const schema = z.object({
 type FormData = z.infer<typeof schema>;
 
 interface Member { id: string; userId: string; fullName: string; role: string }
-interface Invitation { id: string; email: string; role: string; expiresAt: string; token: string }
+interface Invitation { id: string; email: string; role: string; expiresAt: string }
 
 interface Props {
   institutionName: string;
@@ -66,6 +66,16 @@ export function TeamPageClient({ canInvite, members, invitations }: Props) {
     await navigator.clipboard.writeText(url);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  }
+
+  async function revokeInvitation(id: string) {
+    const res = await fetch(`/api/invitations?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+    const result = await res.json();
+    if (!result.ok) {
+      setError(result.error ?? "Failed to revoke invitation");
+      return;
+    }
+    router.refresh();
   }
 
   return (
@@ -157,6 +167,17 @@ export function TeamPageClient({ canInvite, members, invitations }: Props) {
                 <span className="text-xs text-muted-foreground">
                   expires {new Date(i.expiresAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}
                 </span>
+                {canInvite && (
+                  <Button
+                    type="button"
+                    size="iconSm"
+                    variant="ghost"
+                    aria-label={`Revoke invitation for ${i.email}`}
+                    onClick={() => revokeInvitation(i.id)}
+                  >
+                    <Trash2 />
+                  </Button>
+                )}
               </div>
             ))}
           </div>

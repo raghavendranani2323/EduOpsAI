@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Users, GraduationCap, Building2, Bell, ChevronRight, Calendar, ShieldCheck, Download } from "lucide-react";
+import { Users, GraduationCap, Building2, Bell, ChevronRight, Calendar, ShieldCheck, Download, CircleHelp } from "lucide-react";
 import { requireInstitution } from "@/lib/tenant/current";
 import { SignOutButton } from "@/components/shell/sign-out-button";
 import { LanguageSwitcher } from "@/components/i18n/language-switcher";
@@ -50,6 +50,10 @@ export default async function SettingsPage() {
 
       <LanguageSwitcher />
       <PushToggle />
+      <Link href="/support" className="flex items-center gap-3 rounded-xl border p-3.5 hover:bg-muted">
+        <CircleHelp className="h-5 w-5 text-primary" />
+        <span><span className="block text-sm font-medium">Help and support</span><span className="block text-xs text-muted-foreground">Setup guidance, privacy requests and troubleshooting</span></span>
+      </Link>
 
       <div className="pt-2">
         <SignOutButton variant="settings" />

@@ -8,7 +8,7 @@ export function Landing() {
   return (
     <div className="min-h-[100dvh] bg-background text-foreground overflow-x-clip">
       <LandingNav />
-      <main>
+      <main id="main-content">
         <Hero />
         <TrustMarquee />
         <Stats />

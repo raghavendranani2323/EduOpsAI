@@ -4,6 +4,9 @@ import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { requireInstitution } from "@/lib/tenant/current";
 import { prismaAdmin } from "@/lib/prisma/admin";
 import { normalizeIndianPhone } from "@/lib/staff/helpers";
+import { serverErrorResponse } from "@/lib/api/errors";
+import { logServer } from "@/lib/observability/logger";
+import { requestIdFrom } from "@/lib/observability/request";
 
 const schema = z.object({
   fullName:      z.string().min(2).max(120).optional(),
@@ -15,6 +18,7 @@ const schema = z.object({
 
 // Owner/admin updates a staff member's details within their institution.
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const requestId = requestIdFrom(req);
   const { user, institution, membership } = await requireInstitution();
   if (!["OWNER", "ADMIN"].includes(membership.role)) {
     return NextResponse.json({ ok: false, error: "Only owners and admins can edit staff" }, { status: 403 });
@@ -52,7 +56,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const serviceKey  = process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (!supabaseUrl || !serviceKey) {
-      return NextResponse.json({ ok: false, error: "Server is missing SUPABASE_SERVICE_ROLE_KEY" }, { status: 500 });
+      logServer("error", "staff.update.auth_not_configured", {
+        requestId,
+        institutionId: institution.id,
+        targetId,
+      });
+      return serverErrorResponse("Staff account updates are temporarily unavailable", { requestId });
     }
     const admin = createServiceClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
     const updated = await admin.auth.admin.updateUserById(targetId, {
@@ -61,7 +70,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       ...(fullName ? { user_metadata: { fullName } } : {}),
     });
     if (updated.error) {
-      return NextResponse.json({ ok: false, error: updated.error.message }, { status: 500 });
+      logServer("error", "staff.update.auth_provider_failed", {
+        requestId,
+        institutionId: institution.id,
+        targetId,
+        error: updated.error,
+      });
+      return serverErrorResponse("Staff account updates are temporarily unavailable", { requestId });
     }
   }
 

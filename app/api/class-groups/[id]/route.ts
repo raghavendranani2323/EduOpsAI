@@ -67,7 +67,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
     if (result.count === 0) return NextResponse.json({ ok: false, error: "Not found" }, { status: 404 });
     return NextResponse.json({ ok: true });
-  } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Unauthorised" }, { status: 401 });
+  } catch {
+    return NextResponse.json({ ok: false, error: "Class group could not be updated" }, { status: 400 });
   }
 }

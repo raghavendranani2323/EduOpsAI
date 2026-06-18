@@ -14,6 +14,9 @@ export async function POST(req: Request) {
 
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ ok: false, error: "Please sign in before enabling notifications" }, { status: 401 });
+  }
   const ua = req.headers.get("user-agent") ?? null;
 
   try {
@@ -21,13 +24,13 @@ export async function POST(req: Request) {
       where: { endpoint: sub.endpoint },
       create: {
         endpoint: sub.endpoint,
-        userId:   user?.id ?? null,
+        userId:   user.id,
         p256dh:   sub.keys.p256dh,
         auth:     sub.keys.auth,
         ua,
       },
       update: {
-        userId: user?.id ?? null,
+        userId: user.id,
         p256dh: sub.keys.p256dh,
         auth:   sub.keys.auth,
         ua,

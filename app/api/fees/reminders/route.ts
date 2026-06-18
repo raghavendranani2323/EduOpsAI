@@ -1,11 +1,16 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireInstitution } from "@/lib/tenant/current";
+import { requireApiInstitution } from "@/lib/api/auth";
 import { withRls } from "@/lib/prisma/rls";
 import { whatsappLink } from "@/lib/format/phone";
 import { formatINR } from "@/lib/format/currency";
 import { formatDate } from "@/lib/format/date";
 import type { Prisma } from "@prisma/client";
+import { ApiError, errorResponse, serverErrorResponse } from "@/lib/api/errors";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
+import { requestIdFrom } from "@/lib/observability/request";
+import { logServer } from "@/lib/observability/logger";
+import { writeAuditEvent } from "@/lib/audit/server";
 
 const remindSchema = z.object({
   scope:   z.enum(["overdue", "month", "selected"]),
@@ -30,12 +35,23 @@ function composeBody(opts: {
 }
 
 export async function POST(req: Request) {
+  const requestId = requestIdFrom(req);
+  let audit: { userId: string; institutionId: string } | null = null;
   try {
-    const { user, institution, membership } = await requireInstitution();
-    if (membership.role === "TEACHER") return NextResponse.json({ ok: false, error: "Not available for teacher accounts" }, { status: 403 });
+    const { user, institution, membership } = await requireApiInstitution();
+    audit = { userId: user.id, institutionId: institution.id };
+    if (!["OWNER", "ADMIN", "ACCOUNTANT"].includes(membership.role)) {
+      throw new ApiError(403, "FEE_REMINDER_FORBIDDEN", "You cannot create fee reminders");
+    }
+    await enforceRateLimit({
+      scope: "fee-reminders",
+      subject: `${institution.id}:${user.id}`,
+      limit: 20,
+      windowSeconds: 60 * 60,
+    });
     const parsed = remindSchema.safeParse(await req.json());
     if (!parsed.success) {
-      return NextResponse.json({ ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
+      throw new ApiError(400, "INVALID_REMINDER", parsed.error.issues[0]?.message ?? "Invalid input");
     }
     const { scope, classId, month, invoiceIds } = parsed.data;
     const today = new Date();
@@ -50,12 +66,14 @@ export async function POST(req: Request) {
       if (scope === "overdue") {
         where.dueDate = { lt: today };
       } else if (scope === "month") {
-        if (!month) throw new Error("month required");
+        if (!month) throw new ApiError(400, "MONTH_REQUIRED", "Month is required");
         const [y, m] = month.split("-").map(Number);
         where.periodStart = { gte: new Date(y, m - 1, 1) };
         where.periodEnd   = { lte: new Date(y, m, 0) };
       } else if (scope === "selected") {
-        if (!invoiceIds || invoiceIds.length === 0) throw new Error("invoiceIds required");
+        if (!invoiceIds || invoiceIds.length === 0) {
+          throw new ApiError(400, "INVOICES_REQUIRED", "Select at least one invoice");
+        }
         where.id = { in: invoiceIds };
       }
       if (classId) where.student = { classId };
@@ -121,9 +139,17 @@ export async function POST(req: Request) {
       return items;
     });
 
+    await writeAuditEvent({
+      actorUserId: user.id,
+      institutionId: institution.id,
+      action: "fee.reminders.prepare",
+      outcome: "success",
+      meta: { scope, total: reminders.length },
+    });
     return NextResponse.json({ ok: true, reminders, total: reminders.length });
-  } catch (e) {
-    console.error(e);
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Failed to build reminders" }, { status: 500 });
+  } catch (err) {
+    if (err instanceof ApiError) return errorResponse(err, { requestId });
+    logServer("error", "fee.reminders.failed", { requestId, error: err, ...audit });
+    return serverErrorResponse("Failed to prepare reminders", { requestId });
   }
 }

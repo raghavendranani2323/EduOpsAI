@@ -1,15 +1,18 @@
 import { NextResponse } from "next/server";
-import { requireInstitution } from "@/lib/tenant/current";
+import { requireApiInstitution } from "@/lib/api/auth";
 import { withRls } from "@/lib/prisma/rls";
+import { ApiError, errorResponse, serverErrorResponse } from "@/lib/api/errors";
+import { assertRole } from "@/lib/auth/permissions";
+import { writeAuditEvent } from "@/lib/audit/server";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { user, institution } = await requireInstitution();
+    const { user, institution, membership } = await requireApiInstitution();
+    assertRole(membership.role, ["OWNER", "ADMIN"], "CLASS_UPDATE_FORBIDDEN", "Only owners and admins can update classes");
     const { id } = await params;
     const body = await req.json() as {
       name?: string;
       section?: string;
-      academicYear?: string;
       medium?: string | null;
       sectionTeacherId?: string | null;
       sectionLeaderId?: string | null;
@@ -43,7 +46,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         data: {
           ...(body.name ? { name: body.name.trim() } : {}),
           ...(body.section !== undefined ? { section: body.section?.trim() || null } : {}),
-          ...(body.academicYear ? { academicYear: body.academicYear.trim() } : {}),
           ...(body.medium !== undefined ? { medium: body.medium?.trim() || null } : {}),
           ...(body.sectionTeacherId !== undefined ? { sectionTeacherId: body.sectionTeacherId || null } : {}),
           ...(body.sectionLeaderId !== undefined ? { sectionLeaderId: body.sectionLeaderId || null } : {}),
@@ -54,19 +56,35 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     });
 
     if (cls.count === 0) return NextResponse.json({ ok: false, error: "Not found" }, { status: 404 });
+    await writeAuditEvent({ actorUserId: user.id, institutionId: institution.id, action: "class.update", targetId: id, outcome: "success" });
     return NextResponse.json({ ok: true });
-  } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Unauthorised" }, { status: 401 });
+  } catch (err) {
+    if (err instanceof ApiError) return errorResponse(err);
+    return serverErrorResponse("Failed to update class");
   }
 }
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { user, institution } = await requireInstitution();
+    const { user, institution, membership } = await requireApiInstitution();
+    assertRole(membership.role, ["OWNER", "ADMIN"], "CLASS_DELETE_FORBIDDEN", "Only owners and admins can delete classes");
     const { id } = await params;
 
     // Unassign students before deleting the class
     await withRls(user.id, async (tx) => {
+      const [attendanceCount, homeworkCount, examCount, noticeCount] = await Promise.all([
+        tx.attendanceSession.count({ where: { classId: id, institutionId: institution.id } }),
+        tx.homework.count({ where: { classId: id, institutionId: institution.id } }),
+        tx.exam.count({ where: { classId: id, institutionId: institution.id } }),
+        tx.notice.count({ where: { classId: id, institutionId: institution.id } }),
+      ]);
+      if (attendanceCount || homeworkCount || examCount || noticeCount) {
+        throw new ApiError(
+          409,
+          "CLASS_HAS_HISTORY",
+          "Archive or retain classes that have attendance, homework, exams, or notices",
+        );
+      }
       await tx.student.updateMany({
         where: { classId: id, institutionId: institution.id },
         data: { classId: null },
@@ -74,8 +92,10 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
       await tx.class.deleteMany({ where: { id, institutionId: institution.id } });
     });
 
+    await writeAuditEvent({ actorUserId: user.id, institutionId: institution.id, action: "class.delete", targetId: id, outcome: "success" });
     return NextResponse.json({ ok: true });
-  } catch {
-    return NextResponse.json({ ok: false, error: "Unauthorised" }, { status: 401 });
+  } catch (err) {
+    if (err instanceof ApiError) return errorResponse(err);
+    return serverErrorResponse("Failed to delete class");
   }
 }
