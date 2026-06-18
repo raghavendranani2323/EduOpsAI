@@ -20,6 +20,7 @@ resource scoping, and a misuse test.
 | `app/api/invitations/accept/route.ts` | Accept a bearer invitation before membership exists. | Authenticated matching email; random token; expiry; atomic single use; invitation institution only. |
 | `app/api/push/send/route.ts` | Internal administrative push delivery. | Mandatory internal token; explicit institution and member recipients; rate limit. |
 | `app/api/push/subscribe/route.ts` | Store the authenticated user's browser subscription. | Authenticated user; endpoint belongs to that user. |
+| `app/api/communications/webhook/route.ts` | Apply Meta WhatsApp delivery receipts without a user session. | Valid `x-hub-signature-256`; provider message ID lookup only; monotonic status updates; no message body logging. |
 | `app/api/staff/*` | Auth administration and membership maintenance. | Owner/admin; target membership in current institution; no owner escalation by admins. |
 | `app/p/[token]/*` | Private parent bearer portal. | Valid student token; every related query scoped to that student/institution/class. |
 | `app/parent/page.tsx`, `lib/parent/children.ts` | Verified parent portal. | Verified guardian phone/session; returned children derived from guardian links. |

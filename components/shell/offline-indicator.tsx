@@ -1,14 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { WifiOff, RefreshCw } from "lucide-react";
+import { WifiOff, RefreshCw, AlertTriangle } from "lucide-react";
 import { useI18n } from "@/components/i18n/provider";
-import { usePendingMutationCount } from "@/lib/offline/use-pending-mutations";
+import { usePendingMutationCount, useProblemMutationCount } from "@/lib/offline/use-pending-mutations";
 
 export function OfflineIndicator() {
   const { t } = useI18n();
   const [offline, setOffline] = useState(() => typeof navigator !== "undefined" && !navigator.onLine);
   const pending = usePendingMutationCount();
+  const problems = useProblemMutationCount();
 
   useEffect(() => {
     if (typeof navigator === "undefined") return;
@@ -21,6 +22,15 @@ export function OfflineIndicator() {
       window.removeEventListener("offline", off);
     };
   }, []);
+
+  if (problems > 0) {
+    return (
+      <div className="sticky top-14 md:top-0 z-30 bg-red-700 text-white text-xs font-medium px-4 py-2 flex items-center justify-center gap-2" role="alert">
+        <AlertTriangle className="h-3.5 w-3.5" />
+        <span>{problems} offline change{problems === 1 ? "" : "s"} need review. Reopen attendance before retrying.</span>
+      </div>
+    );
+  }
 
   if (offline) {
     return (

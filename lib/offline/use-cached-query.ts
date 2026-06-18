@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useQuery, type UseQueryOptions } from "@tanstack/react-query";
 import { cacheGet, cacheSet } from "./db";
+import { useOfflineScope } from "./scope";
 
 interface Options<T> extends Omit<UseQueryOptions<T, Error, T, readonly unknown[]>, "queryKey" | "queryFn"> {
   cacheKey: string;
@@ -16,15 +17,16 @@ export function useCachedQuery<T>(
   fetcher: () => Promise<T>,
   opts: Options<T>,
 ) {
+  const scope = useOfflineScope();
   const result = useQuery<T>({
     queryKey: key,
     queryFn: async () => {
       try {
         const fresh = await fetcher();
-        cacheSet(opts.cacheKey, fresh);
+        cacheSet(scope, opts.cacheKey, fresh);
         return fresh;
       } catch (err) {
-        const cached = await cacheGet<T>(opts.cacheKey);
+        const cached = await cacheGet<T>(scope, opts.cacheKey);
         if (cached) return cached;
         throw err;
       }
@@ -37,8 +39,8 @@ export function useCachedQuery<T>(
 
   // Writethrough cache on initial data so it survives offline reloads.
   useEffect(() => {
-    if (result.data) cacheSet(opts.cacheKey, result.data);
-  }, [opts.cacheKey, result.data]);
+    if (result.data) cacheSet(scope, opts.cacheKey, result.data);
+  }, [scope, opts.cacheKey, result.data]);
 
   return result;
 }

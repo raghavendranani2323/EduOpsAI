@@ -58,4 +58,37 @@ Validation:
 
 ## MSG-001 - Communications
 
-Status: pending.
+Status: implemented locally; live Meta provider/webhook verification pending.
+
+Implemented:
+
+- Removed the console provider and all message-body/phone console logging.
+- Added fail-closed Meta WhatsApp Cloud API configuration.
+- Sends are recorded as queued before provider submission and are never marked
+  sent merely because the application attempted delivery.
+- Provider acceptance stores the provider message ID while retaining queued
+  status.
+- Signed Meta webhooks advance messages through sent, delivered, read, or
+  failed states without allowing status downgrades.
+- Added delivery timestamps, provider lookup index, owner/admin message update
+  policy, legacy console-message correction, and migration rollback notes.
+- Updated the UI to report queued rather than sent counts.
+- Added provider setup/runbook notes, privileged webhook allowlisting, focused
+  signature/status tests, and migration verification.
+
+Migration: `prisma/migrations/phase10_communications_delivery.sql`.
+
+Validation:
+
+- `pnpm test:phase4-communications`: passed.
+- `pnpm test:migrations`: static verification passed; live check blocked.
+- `pnpm test:phase4-crm`: passed.
+- `pnpm test:phase4-parent`: passed.
+- `pnpm test:permissions`: passed.
+- `pnpm typecheck`: passed.
+- `pnpm lint`: passed with 16 existing warnings and no errors.
+- `pnpm build`: passed; final repository build later passed on Next.js 16.2.9.
+
+Live provider acceptance, signed webhook delivery receipts, Meta template/session
+rules, and production phone-number configuration remain blocked without staging
+Meta credentials and a public callback URL.

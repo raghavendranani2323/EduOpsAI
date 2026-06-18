@@ -119,7 +119,7 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({ ok: true, ...result });
-  } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Failed" }, { status: 400 });
+  } catch {
+    return NextResponse.json({ ok: false, error: "Promotion could not be completed" }, { status: 400 });
   }
 }

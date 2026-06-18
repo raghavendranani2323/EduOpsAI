@@ -16,6 +16,7 @@ const attendanceSchema = z.object({
   classId:      z.string().min(1),
   date:         z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date"),
   sessionLabel: z.string().max(20).optional(),
+  expectedUpdatedAt: z.string().datetime().nullable().optional(),
   records: z.array(z.object({
     studentId: z.string().min(1),
     status:    z.enum(["PRESENT", "ABSENT", "LATE", "HALF_DAY"]),
@@ -83,7 +84,7 @@ export async function POST(req: Request) {
     if (!parsed.success) {
       return NextResponse.json({ ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
     }
-    const { classId, date, records } = parsed.data;
+    const { classId, date, records, expectedUpdatedAt } = parsed.data;
     audit = { actorUserId: user.id, institutionId: institution.id, classId, date };
     const sessionLabel = parsed.data.sessionLabel ?? "morning";
     const sessionDate = parseAttendanceDate(date);
@@ -91,6 +92,18 @@ export async function POST(req: Request) {
 
     const session = await withRls(user.id, async (tx) => {
       await requireAttendanceClassAccess(tx, user.id, institution.id, membership.role, classId);
+      const current = await tx.attendanceSession.findFirst({
+        where: { institutionId: institution.id, classId, sessionDate, sessionLabel },
+        select: { markedAt: true },
+      });
+      const currentVersion = current?.markedAt.toISOString() ?? null;
+      if (currentVersion !== (expectedUpdatedAt ?? null)) {
+        throw new ApiError(
+          409,
+          "ATTENDANCE_SYNC_CONFLICT",
+          "Attendance changed on the server. Reload the class and review before saving again.",
+        );
+      }
       return replaceAttendanceRecords(tx, {
         institutionId: institution.id,
         classId,
@@ -151,7 +164,12 @@ export async function POST(req: Request) {
       })
       .filter((x): x is NonNullable<typeof x> => x !== null);
 
-    return NextResponse.json({ ok: true, sessionId: session.id, alerts });
+    return NextResponse.json({
+      ok: true,
+      sessionId: session.id,
+      updatedAt: session.markedAt.toISOString(),
+      alerts,
+    });
   } catch (err) {
     if (err instanceof ApiError) {
       if (audit && [400, 403, 404].includes(err.status)) {

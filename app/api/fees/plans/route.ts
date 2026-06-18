@@ -3,6 +3,8 @@ import { z } from "zod";
 import { requireInstitution } from "@/lib/tenant/current";
 import { withRls } from "@/lib/prisma/rls";
 import { resolveAcademicYearTx } from "@/lib/tenant/academic-year";
+import { ApiError, errorResponse, serverErrorResponse } from "@/lib/api/errors";
+import { writeAuditEvent } from "@/lib/audit/server";
 
 const componentSchema = z.object({
   name:       z.string().min(1).max(60),
@@ -87,8 +89,17 @@ export async function POST(req: Request) {
         },
       });
     });
+    await writeAuditEvent({
+      actorUserId: user.id,
+      institutionId: institution.id,
+      action: "fee.plan.create",
+      targetId: plan.id,
+      outcome: "success",
+      meta: { cadence: plan.cadence, amount: plan.amount },
+    });
     return NextResponse.json({ ok: true, plan }, { status: 201 });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Failed" }, { status: 500 });
+    if (e instanceof ApiError) return errorResponse(e);
+    return serverErrorResponse("Failed to create fee plan");
   }
 }

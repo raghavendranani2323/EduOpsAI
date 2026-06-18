@@ -40,8 +40,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
       studentName: invoice.student.fullName,
       institutionName: institution.name,
     });
-  } catch (e) {
-    console.error(e);
-    return NextResponse.json({ ok: false, error: String(e) }, { status: 500 });
+  } catch {
+    return NextResponse.json({ ok: false, error: "Online payment is unavailable" }, { status: 503 });
   }
 }

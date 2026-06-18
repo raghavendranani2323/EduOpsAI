@@ -370,3 +370,93 @@ without staging identities and dedicated database credentials.
 
 Live Supabase OTP delivery, distinct parent identities, access-event RLS, and
 token expiry against a staging clock remain blocked by external configuration.
+
+## Phase 4 MSG-001 - 18/06/2026
+
+Implemented a fail-closed Meta WhatsApp Cloud API provider, queued delivery
+state, signed webhook status processing, monotonic sent/delivered/read/failed
+transitions, provider timestamps/indexing, and legacy console-message
+correction.
+
+| Command | Result |
+|---|---|
+| `pnpm test:phase4-communications` | Passed provider-removal, fail-closed, signature, status parsing, monotonic transition, migration, and UI wording checks. |
+| `pnpm test:migrations` | Static verification passed; live Phase 10 verification blocked by missing dedicated database URL. |
+| `pnpm test:phase4-crm` | Passed. |
+| `pnpm test:phase4-parent` | Passed. |
+| `pnpm test:permissions` | Passed. |
+| `pnpm typecheck` | Passed. |
+| `pnpm lint` | Passed with 16 existing warnings and no errors. |
+| `pnpm build` | Passed on the then-installed Next.js version. |
+
+Live Meta provider acceptance and signed delivery webhooks were not executed
+because staging WhatsApp credentials and a public callback URL are unavailable.
+
+## Final Non-Payment Readiness Verification - 18/06/2026
+
+### Release gates
+
+| Command | Result |
+|---|---|
+| `pnpm test:phase1` | Passed. |
+| `pnpm test:api-foundations` | Passed. |
+| `pnpm test:permissions` | Passed. |
+| `pnpm test:data-integrity` | Passed. |
+| `pnpm test:phase4-crm` | Passed. |
+| `pnpm test:phase4-parent` | Passed. |
+| `pnpm test:phase4-communications` | Passed. |
+| `pnpm test:phase5-readiness` | Passed, including public-proxy and safe staff-provider error checks. |
+| `pnpm test:migrations` | Static ordered SQL verification passed; live verification skipped because `RLS_TEST_SUPERUSER_URL` is unavailable. |
+| `node scripts/generate-consolidated-supabase-sql.mjs --check` | Passed without rewriting the generated SQL. |
+| `pnpm typecheck` | Passed. |
+| `pnpm lint` | Passed with 15 warnings and no errors. |
+| `pnpm build` | Passed on Next.js 16.2.9; 79 static-generation entries completed. |
+| `pnpm test:performance-budget` | Passed: largest client chunk 316,543 bytes; total client JavaScript 2,168,492 bytes. |
+| `pnpm audit --audit-level moderate` | Passed with zero known vulnerabilities. |
+
+### Consolidated SQL verification
+
+- The generator was run twice before the atomicity update and produced the same
+  SHA-256 hash each time.
+- The generator now supports `--check` and confirms exact ordered-source
+  consistency without modifying the artifact.
+- The consolidated script replaces the Phase 10 concurrent index with an
+  idempotent normal index suitable for one Supabase SQL Editor transaction.
+- The combined runner uses `BEGIN`, `pg_advisory_xact_lock` and `COMMIT`, so a
+  failed preflight or DDL statement rolls back the complete run and releases
+  the advisory lock automatically.
+- Static verification confirms ordered Phase 4-10 content, explicit grants,
+  RLS setup, hardened helper function execution, the remediation run marker and
+  PostgREST schema reload.
+- Live execution and second-run database verification remain blocked without a
+  restored staging database and dedicated test credentials.
+
+### Production-mode HTTP smoke
+
+Next.js 16.2.9 was started on port 3100 from the final production build.
+
+| Route | Result |
+|---|---|
+| `/` | `200 text/html` |
+| `/privacy` | `200 text/html` |
+| `/status` | `200 text/html` |
+| `/robots.txt` | `200 text/plain` |
+| `/sitemap.xml` | `200 application/xml` |
+| `/api/health` | `200 application/json` |
+| `/api/communications/webhook` without provider configuration | `503 application/json`, fail closed |
+| anonymous `/api/attendance` | `401 application/json` |
+
+The first smoke exposed proxy blocking of health, trust/SEO routes and the Meta
+webhook. The public allowlist was corrected, covered by the Phase 5 readiness
+test, rebuilt and re-smoked successfully.
+
+### Evidence classification
+
+- Implemented locally: application code, generated SQL, static/unit checks,
+  build, performance budget, dependency audit and local production HTTP smoke.
+- Staging-blocked: live SQL/RLS, role fixtures, storage, provider delivery,
+  realistic offline/browser/accessibility checks, query plans, lock timing,
+  monitoring integration and restore drill.
+- Customer/qualified review: legal wording, pricing/ICP, parent access
+  preference, accountant report fit, localisation and segment content.
+- Deferred: `PAY-001` through `PAY-004`.

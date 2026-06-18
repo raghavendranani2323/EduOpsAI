@@ -3,6 +3,7 @@ import { requireApiInstitution } from "@/lib/api/auth";
 import { withRls } from "@/lib/prisma/rls";
 import { ApiError, errorResponse, serverErrorResponse } from "@/lib/api/errors";
 import { assertRole } from "@/lib/auth/permissions";
+import { writeAuditEvent } from "@/lib/audit/server";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -55,6 +56,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     });
 
     if (cls.count === 0) return NextResponse.json({ ok: false, error: "Not found" }, { status: 404 });
+    await writeAuditEvent({ actorUserId: user.id, institutionId: institution.id, action: "class.update", targetId: id, outcome: "success" });
     return NextResponse.json({ ok: true });
   } catch (err) {
     if (err instanceof ApiError) return errorResponse(err);
@@ -90,6 +92,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
       await tx.class.deleteMany({ where: { id, institutionId: institution.id } });
     });
 
+    await writeAuditEvent({ actorUserId: user.id, institutionId: institution.id, action: "class.delete", targetId: id, outcome: "success" });
     return NextResponse.json({ ok: true });
   } catch (err) {
     if (err instanceof ApiError) return errorResponse(err);

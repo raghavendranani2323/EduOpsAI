@@ -78,7 +78,7 @@ export default async function FeesPage({
       tx.class.findMany({
         where: { institutionId: institution.id },
         orderBy: { name: "asc" },
-        select: { id: true, name: true },
+        select: { id: true, name: true, section: true },
       }),
       tx.invoice.count({
         where: {
@@ -122,7 +122,10 @@ export default async function FeesPage({
       })),
       nextCursor,
       total: count,
-      classes: allClasses,
+      classes: allClasses.map(cls => ({
+        id: cls.id,
+        name: [cls.name, cls.section].filter(Boolean).join(" – "),
+      })),
       summary: { collected, outstanding, overdueCount },
     };
   });
@@ -133,6 +136,12 @@ export default async function FeesPage({
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold">Fees</h1>
         <div className="flex gap-2">
+          <Link
+            href="/fees/reports"
+            className="flex items-center gap-1.5 border rounded-xl px-3 py-2.5 text-sm font-medium min-h-[44px] hover:bg-muted transition-colors"
+          >
+            Reports
+          </Link>
           <Link
             href="/fees/generate"
             className="flex items-center gap-1.5 border rounded-xl px-3 py-2.5 text-sm font-medium min-h-[44px] hover:bg-muted transition-colors"

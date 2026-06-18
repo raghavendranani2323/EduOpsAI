@@ -8,8 +8,10 @@ const permissionsPath = "prisma/migrations/phase6_permission_hardening.sql";
 const integrityPath = "prisma/migrations/phase7_non_payment_data_integrity.sql";
 const crmPath = "prisma/migrations/phase8_admissions_crm.sql";
 const parentPath = "prisma/migrations/phase9_parent_access.sql";
+const communicationsPath = "prisma/migrations/phase10_communications_delivery.sql";
+const consolidatedPath = "prisma/migrations/supabase_non_payment_remediation_all.sql";
 
-const [attendanceSql, invitationsSql, foundationsSql, permissionsSql, integritySql, crmSql, parentSql] = await Promise.all([
+const [attendanceSql, invitationsSql, foundationsSql, permissionsSql, integritySql, crmSql, parentSql, communicationsSql, consolidatedSql] = await Promise.all([
   readFile(attendancePath, "utf8"),
   readFile(invitationsPath, "utf8"),
   readFile(foundationsPath, "utf8"),
@@ -17,6 +19,8 @@ const [attendanceSql, invitationsSql, foundationsSql, permissionsSql, integrityS
   readFile(integrityPath, "utf8"),
   readFile(crmPath, "utf8"),
   readFile(parentPath, "utf8"),
+  readFile(communicationsPath, "utf8"),
+  readFile(consolidatedPath, "utf8"),
 ]);
 
 const requiredAttendancePolicies = [
@@ -38,6 +42,37 @@ for (const required of [
 ]) {
   if (!parentSql.includes(required)) {
     throw new Error(`${parentPath} is missing ${required}`);
+  }
+}
+for (const required of [
+  "BEGIN;",
+  "pg_advisory_xact_lock",
+  "phase4_attendance_integrity.sql",
+  "phase10_communications_delivery.sql",
+  "eduops_remediation_runs",
+  "REVOKE ALL ON TABLE rate_limit_counters",
+  "NOTIFY pgrst, 'reload schema'",
+  "COMMIT;",
+]) {
+  if (!consolidatedSql.includes(required)) {
+    throw new Error(`${consolidatedPath} is missing ${required}`);
+  }
+}
+if (consolidatedSql.includes("CREATE INDEX CONCURRENTLY")) {
+  throw new Error(`${consolidatedPath} must be runnable as one Supabase SQL Editor script`);
+}
+if (consolidatedSql.includes("pg_advisory_lock(") || consolidatedSql.includes("pg_advisory_unlock(")) {
+  throw new Error(`${consolidatedPath} must use a transaction-scoped advisory lock`);
+}
+for (const required of [
+  "messages_provider_message_id_idx",
+  "CREATE POLICY msg_upd",
+  "Legacy console delivery was not verified",
+  "Rollback:",
+  "Staging verification:",
+]) {
+  if (!communicationsSql.includes(required)) {
+    throw new Error(`${communicationsPath} is missing ${required}`);
   }
 }
 for (const required of [
@@ -157,6 +192,34 @@ try {
   const integrity = integrityObjects.rows[0];
   if (!integrity.admission_index || !integrity.invitation_index || !integrity.class_trigger || !integrity.timetable_trigger) {
     throw new Error("Phase 7 data-integrity objects are not fully applied");
+  }
+
+  const communicationObjects = await db.query(`
+    SELECT
+      to_regclass('public.messages_provider_message_id_idx') IS NOT NULL AS provider_index,
+      EXISTS (
+        SELECT 1 FROM pg_policies
+        WHERE schemaname = 'public'
+          AND tablename = 'messages'
+          AND policyname = 'msg_upd'
+      ) AS update_policy,
+      (
+        SELECT COUNT(*) = 5
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'messages'
+          AND column_name = ANY(ARRAY[
+            'provider',
+            'providerStatusAt',
+            'deliveredAt',
+            'readAt',
+            'failedAt'
+          ])
+      ) AS delivery_columns
+  `);
+  const communication = communicationObjects.rows[0];
+  if (!communication.provider_index || !communication.update_policy || !communication.delivery_columns) {
+    throw new Error("Phase 10 communications delivery objects are not fully applied");
   }
 
   console.log("Remediation migrations are present and RLS remains enabled.");

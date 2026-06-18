@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/browser";
 import { cn } from "@/lib/utils";
 import { useI18n } from "@/components/i18n/provider";
+import { clearOfflineData } from "@/lib/offline/db";
 
 interface SignOutButtonProps {
   className?: string;
@@ -21,6 +22,7 @@ export function SignOutButton({ className, variant = "sidebar" }: SignOutButtonP
     setLoading(true);
     const supabase = createClient();
     await supabase.auth.signOut();
+    await clearOfflineData();
     router.push("/login");
     router.refresh();
   }

@@ -53,8 +53,8 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     } catch { /* ignore */ }
 
     return NextResponse.json({ ok: true, academicYear: updated });
-  } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Failed" }, { status: 400 });
+  } catch {
+    return NextResponse.json({ ok: false, error: "Academic year could not be updated" }, { status: 400 });
   }
 }
 
@@ -88,7 +88,7 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string 
     } catch { /* ignore */ }
 
     return NextResponse.json({ ok: true });
-  } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Failed" }, { status: 400 });
+  } catch {
+    return NextResponse.json({ ok: false, error: "Academic year cannot be deleted while it is active or in use" }, { status: 400 });
   }
 }

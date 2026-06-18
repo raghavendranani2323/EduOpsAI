@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireInstitution } from "@/lib/tenant/current";
 import { withRls } from "@/lib/prisma/rls";
+import { ApiError, errorResponse, serverErrorResponse } from "@/lib/api/errors";
+import { writeAuditEvent } from "@/lib/audit/server";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -18,9 +20,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       tx.messageTemplate.updateMany({ where: { id, institutionId: institution.id }, data })
     );
     if (count.count === 0) return NextResponse.json({ ok: false, error: "Not found" }, { status: 404 });
+    await writeAuditEvent({ actorUserId: user.id, institutionId: institution.id, action: "communications.template.update", targetId: id, outcome: "success" });
     return NextResponse.json({ ok: true });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: String(e) }, { status: 500 });
+    if (e instanceof ApiError) return errorResponse(e);
+    return serverErrorResponse("Failed to update template");
   }
 }
 
@@ -32,8 +36,10 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     await withRls(user.id, (tx) =>
       tx.messageTemplate.deleteMany({ where: { id, institutionId: institution.id } })
     );
+    await writeAuditEvent({ actorUserId: user.id, institutionId: institution.id, action: "communications.template.delete", targetId: id, outcome: "success" });
     return NextResponse.json({ ok: true });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: String(e) }, { status: 500 });
+    if (e instanceof ApiError) return errorResponse(e);
+    return serverErrorResponse("Failed to delete template");
   }
 }

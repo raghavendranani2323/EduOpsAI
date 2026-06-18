@@ -59,14 +59,14 @@ export function CommunicationsClient({ templates: initial, messages: initialMsgs
   const router = useRouter();
 
   const [templates, setTemplates]   = useState(initial);
-  const [messages,  setMessages]    = useState(initialMsgs);
+  const messages = initialMsgs;
   const [tab,       setTab]         = useState<"templates" | "log">("templates");
   const [openTpl,   setOpenTpl]     = useState(false);
   const [editingTpl, setEditingTpl] = useState<Template | null>(null);
   const [openSend,  setOpenSend]    = useState(false);
   const [saving,    setSaving]      = useState(false);
   const [error,     setError]       = useState<string | null>(null);
-  const [sendResult, setSendResult] = useState<{ sent: number; failed: number } | null>(null);
+  const [sendResult, setSendResult] = useState<{ queued: number; failed: number } | null>(null);
 
   const { register: regTpl, handleSubmit: hsTpl, reset: resetTpl, formState: { errors: tplErrors } } = useForm<TemplateForm>({
     resolver: zodResolver(templateSchema) as Resolver<TemplateForm>,
@@ -116,7 +116,7 @@ export function CommunicationsClient({ templates: initial, messages: initialMsgs
     const result = await res.json();
     setSaving(false);
     if (!result.ok) { setError(result.error); return; }
-    setSendResult({ sent: result.sent, failed: result.failed });
+    setSendResult({ queued: result.queued, failed: result.failed });
     resetSend();
     router.refresh();
   }
@@ -277,7 +277,7 @@ export function CommunicationsClient({ templates: initial, messages: initialMsgs
               <div className="space-y-3">
                 <div className="rounded-xl bg-green-50 border border-green-200 p-4 text-center space-y-1">
                   <CheckCheck className="h-6 w-6 text-green-600 mx-auto" />
-                  <p className="font-semibold text-green-900">{sendResult.sent} sent{sendResult.failed > 0 ? `, ${sendResult.failed} failed` : ""}</p>
+                  <p className="font-semibold text-green-900">{sendResult.queued} queued for delivery{sendResult.failed > 0 ? `, ${sendResult.failed} failed` : ""}</p>
                 </div>
                 <button onClick={() => { setOpenSend(false); setSendResult(null); }} className="w-full border rounded-xl py-2.5 text-sm font-medium min-h-[44px]">Close</button>
               </div>

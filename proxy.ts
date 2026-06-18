@@ -45,6 +45,8 @@ export async function proxy(request: NextRequest) {
   const isPublicApi =
     pathname.startsWith("/api/auth") ||
     pathname.startsWith("/api/razorpay") ||
+    pathname === "/api/health" ||
+    pathname === "/api/communications/webhook" ||
     pathname === "/api/push/send" ||
     pathname.startsWith("/api/parent");
   const isPublicRoute =
@@ -56,6 +58,14 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith("/api/p/") ||
     pathname.startsWith("/parent") ||
     pathname.startsWith("/api/parent") ||
+    pathname === "/privacy" ||
+    pathname === "/terms" ||
+    pathname === "/data-rights" ||
+    pathname === "/support" ||
+    pathname === "/status" ||
+    pathname === "/robots.txt" ||
+    pathname === "/sitemap.xml" ||
+    pathname === "/opengraph-image" ||
     pathname === "/manifest.json" ||
     pathname === "/sw.js" ||
     pathname === "/offline.html";

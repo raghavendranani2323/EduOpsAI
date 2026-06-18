@@ -3,6 +3,7 @@ import { requireApiInstitution } from "@/lib/api/auth";
 import { withRls } from "@/lib/prisma/rls";
 import { ApiError, errorResponse, serverErrorResponse } from "@/lib/api/errors";
 import { assertRole, authorizedClassIds } from "@/lib/auth/permissions";
+import { writeAuditEvent } from "@/lib/audit/server";
 
 export async function GET() {
   try {
@@ -102,6 +103,7 @@ export async function POST(req: Request) {
         },
       });
     });
+    await writeAuditEvent({ actorUserId: user.id, institutionId: institution.id, action: "class.create", targetId: cls.id, outcome: "success" });
     return NextResponse.json({ ok: true, class: cls }, { status: 201 });
   } catch (err) {
     if (err instanceof ApiError) return errorResponse(err);

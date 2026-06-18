@@ -104,7 +104,7 @@ export default async function AttendanceClassPage({
     <div className="flex flex-col min-h-[100dvh]">
       {/* Header */}
       <div className="flex items-center gap-3 p-4 border-b bg-background sticky top-0 z-10">
-        <Link href="/attendance" className="p-2 rounded-lg hover:bg-muted min-h-[44px] min-w-[44px] flex items-center justify-center">
+        <Link href="/attendance" aria-label="Back to attendance classes" className="p-2 rounded-lg hover:bg-muted min-h-[44px] min-w-[44px] flex items-center justify-center">
           <ChevronLeft className="h-5 w-5" />
         </Link>
         <div className="flex-1 min-w-0">
@@ -144,6 +144,7 @@ export default async function AttendanceClassPage({
             existingRecords={existingRecords.map((r: AttendanceRecord) => ({ studentId: r.studentId, status: r.status, note: r.note ?? undefined }))}
             yesterdayRecords={yesterdayRecords.map(r => ({ studentId: r.studentId, status: r.status }))}
             isEdit={!!existingSession}
+            expectedUpdatedAt={existingSession?.markedAt.toISOString() ?? null}
             terminology={t}
           />
         )}

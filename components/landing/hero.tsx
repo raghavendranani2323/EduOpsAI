@@ -90,9 +90,8 @@ export function Hero() {
             className="text-fluid-lead text-ink-foreground/65 mt-5 max-w-xl mx-auto lg:mx-0 animate-rise"
             style={{ animationDelay: "200ms" }}
           >
-            Mark attendance for 40 students in under a minute. Collect fees with UPI and
-            automatic reminders. Reach every parent on WhatsApp — without spreadsheets,
-            registers or chaos.
+            Mark attendance quickly, track cash and UPI collections, follow admissions,
+            and prepare parent messages from one mobile-first workspace.
           </p>
 
           <div

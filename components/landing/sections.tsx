@@ -6,16 +6,14 @@ import { Reveal } from "./reveal";
 import { cn } from "@/lib/utils";
 
 const TRUSTED = [
-  "Sunrise Public School", "Vidya Mandir, Pune", "Little Steps Preschool",
-  "Akash Coaching Centre", "St. Mary's Convent", "Gurukul Academy",
-  "Bright Future Tuition", "Nalanda International",
+  "Coaching centres", "Tuition centres", "Preschools", "Independent schools",
 ];
 
 export function TrustMarquee() {
   return (
     <section className="border-b border-border bg-[var(--surface-1)] py-5 overflow-hidden">
       <p className="text-center text-[11px] uppercase tracking-[0.2em] text-muted-foreground font-semibold mb-4">
-        Trusted by institutions across India
+        Designed for owner-led education teams in India
       </p>
       <div className="relative">
         <div className="absolute inset-y-0 left-0 w-16 bg-gradient-to-r from-[var(--surface-1)] to-transparent z-10" />
@@ -34,10 +32,10 @@ export function TrustMarquee() {
 }
 
 const STATS = [
-  { value: "< 60s", label: "to mark a class of 40" },
-  { value: "₹2.4 Cr+", label: "fees tracked monthly" },
-  { value: "98%", label: "WhatsApp delivery rate" },
-  { value: "10 min", label: "self-serve onboarding" },
+  { value: "40+", label: "students marked from one mobile screen" },
+  { value: "3", label: "collection modes tracked: cash, UPI and bank" },
+  { value: "1", label: "timeline for every admission follow-up" },
+  { value: "0", label: "parent app installs required" },
 ];
 
 export function Stats() {
@@ -61,19 +59,19 @@ const FEATURES = [
   {
     icon: CalendarCheck,
     title: "Attendance in under a minute",
-    desc: "Tap-to-mark, roll-number order, works offline. Absentee alerts go to parents instantly on WhatsApp.",
+    desc: "Tap-to-mark in roll-number order. Attendance can be queued during a brief network interruption and conflict-checked on reconnect.",
     span: true,
   },
   {
     icon: IndianRupee,
-    title: "Fees that collect themselves",
-    desc: "Monthly, quarterly or annual plans. Late fees, sibling discounts, transport fees, partial payments — plus UPI via Razorpay and automatic reminders.",
+    title: "Fee tracking without spreadsheet drift",
+    desc: "Monthly, quarterly or annual plans, partial payments, sibling discounts, due lists and manual cash or UPI collection records.",
     span: true,
   },
   {
     icon: MessageCircle,
     title: "WhatsApp-first communication",
-    desc: "Notices, homework and fee reminders reach parents where they actually are.",
+    desc: "Prepare notices, homework and fee reminders for WhatsApp. Delivery tracking is available when a provider is configured.",
   },
   {
     icon: UserPlus,
@@ -177,19 +175,19 @@ export function HowItWorks() {
 
 const TESTIMONIALS = [
   {
-    quote: "Attendance used to take 15 minutes per class with the register. Now my teachers finish before the first bell stops ringing.",
-    name: "Sunita Deshmukh",
-    role: "Principal, Vidya Mandir, Pune",
+    quote: "Mark attendance, see absentees, and prepare parent follow-up without moving between registers and chat groups.",
+    name: "Teacher workflow",
+    role: "Built for one-handed use on budget Android phones",
   },
   {
-    quote: "Fee defaults dropped by half in two months. The WhatsApp reminders do the awkward conversation for me.",
-    name: "Rajesh Khanna",
-    role: "Owner, Akash Coaching Centre, Jaipur",
+    quote: "Track what was due, what was collected, and which families still need a reminder.",
+    name: "Owner workflow",
+    role: "Clear operational records instead of unverified promises",
   },
   {
-    quote: "Parents stopped calling the office for every small thing. They just open the portal link. My front desk finally breathes.",
-    name: "Mary Thomas",
-    role: "Administrator, St. Mary's Convent, Kochi",
+    quote: "Open one secure link for attendance, homework, notices and fee visibility without installing another app.",
+    name: "Parent workflow",
+    role: "Revocable links and OTP access controls",
   },
 ];
 
@@ -200,7 +198,7 @@ export function Testimonials() {
       <div className="relative mx-auto max-w-6xl px-4 sm:px-6 py-16 sm:py-24">
         <Reveal>
           <h2 className="font-display text-fluid-title font-semibold text-center">
-            Loved by the people who run schools.
+            Built around the work people actually do.
           </h2>
         </Reveal>
         <div className="grid sm:grid-cols-3 gap-4 sm:gap-6 mt-12">

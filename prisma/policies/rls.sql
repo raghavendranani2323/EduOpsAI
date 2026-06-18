@@ -200,6 +200,7 @@ CREATE POLICY tmpl_upd ON message_templates FOR UPDATE USING (has_role("institut
 
 CREATE POLICY msg_sel ON messages FOR SELECT USING (is_member("institutionId"));
 CREATE POLICY msg_ins ON messages FOR INSERT WITH CHECK (has_role("institutionId", 'OWNER', 'ADMIN'));
+CREATE POLICY msg_upd ON messages FOR UPDATE USING (has_role("institutionId", 'OWNER', 'ADMIN')) WITH CHECK (has_role("institutionId", 'OWNER', 'ADMIN'));
 
 -- ── PHASE 2 — subjects / exams / exam_results ──────────────
 ALTER TABLE subjects     ENABLE ROW LEVEL SECURITY;

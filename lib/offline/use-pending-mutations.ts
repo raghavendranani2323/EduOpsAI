@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { getPendingCount } from "./db";
+import { getPendingCount, getProblemCount } from "./db";
+import { useOfflineScope } from "./scope";
 
 const REFRESH_EVENT = "eduops:offline-queue-changed";
 
@@ -12,11 +13,12 @@ export function notifyOfflineQueueChanged() {
 }
 
 export function usePendingMutationCount(): number {
+  const scope = useOfflineScope();
   const [count, setCount] = useState(0);
 
   const refresh = useCallback(() => {
-    getPendingCount().then(setCount).catch(() => {});
-  }, []);
+    getPendingCount(scope).then(setCount).catch(() => {});
+  }, [scope]);
 
   useEffect(() => {
     refresh();
@@ -32,5 +34,19 @@ export function usePendingMutationCount(): number {
     };
   }, [refresh]);
 
+  return count;
+}
+
+export function useProblemMutationCount(): number {
+  const scope = useOfflineScope();
+  const [count, setCount] = useState(0);
+  const refresh = useCallback(() => {
+    getProblemCount(scope).then(setCount).catch(() => {});
+  }, [scope]);
+  useEffect(() => {
+    refresh();
+    window.addEventListener(REFRESH_EVENT, refresh);
+    return () => window.removeEventListener(REFRESH_EVENT, refresh);
+  }, [refresh]);
   return count;
 }

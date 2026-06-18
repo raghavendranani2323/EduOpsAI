@@ -674,8 +674,13 @@ model Message {
   templateId        String?
   body              String
   status            MessageStatus @default(DRAFT)
+  provider          String?
   providerMessageId String?
+  providerStatusAt  DateTime?
   sentAt            DateTime?
+  deliveredAt       DateTime?
+  readAt            DateTime?
+  failedAt          DateTime?
   failureReason     String?
   relatedEntityType String?
   relatedEntityId   String?
@@ -687,6 +692,7 @@ model Message {
 
   @@index([institutionId, status, createdAt])
   @@index([institutionId, recipientPhone, createdAt])
+  @@index([provider, providerMessageId])
   @@map("messages")
 }
 

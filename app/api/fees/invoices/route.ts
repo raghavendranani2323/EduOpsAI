@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireInstitution } from "@/lib/tenant/current";
 import { withRls } from "@/lib/prisma/rls";
+import { ApiError, errorResponse, serverErrorResponse } from "@/lib/api/errors";
+import { writeAuditEvent } from "@/lib/audit/server";
 
 // GET — paginated invoice list (used by fees page as well)
 export async function GET(req: Request) {
@@ -182,9 +184,19 @@ export async function POST(req: Request) {
       return { created, skipped, discounted, preview, total: students.length };
     });
 
+    if (!dryRun) {
+      await writeAuditEvent({
+        actorUserId: user.id,
+        institutionId: institution.id,
+        action: "fee.invoices.generate",
+        targetId: planId,
+        outcome: "success",
+        meta: { created: result.created, skipped: result.skipped, classCount: classIds?.length ?? 0 },
+      });
+    }
     return NextResponse.json({ ok: true, ...result });
   } catch (e) {
-    console.error(e);
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : String(e) }, { status: 500 });
+    if (e instanceof ApiError) return errorResponse(e);
+    return serverErrorResponse("Failed to generate invoices");
   }
 }

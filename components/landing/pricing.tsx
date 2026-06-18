@@ -20,8 +20,8 @@ const PLANS = [
     desc: "For growing schools and coaching centres that want automation.",
     features: [
       "Unlimited students & staff",
-      "UPI fee collection (Razorpay)",
-      "WhatsApp reminders & notices",
+      "Cash, UPI and bank collection tracking",
+      "WhatsApp-ready reminders & notices",
       "Exams, report cards & homework",
       "Admissions CRM",
       "Priority support",
@@ -114,11 +114,11 @@ const FAQS = [
   },
   {
     q: "Does it work on low-end Android phones?",
-    a: "Yes. EduOps is built mobile-first and tested on 5-inch budget Android devices. It also works offline for attendance and syncs when you're back online.",
+    a: "Yes. EduOps is mobile-first. If the network drops while attendance is open, the signed-in device can queue the submission and conflict-check it when connectivity returns. Other modules require a connection.",
   },
   {
     q: "Can it handle our fee structure?",
-    a: "Monthly, quarterly and annual plans, transport and exam fees, late fines, sibling discounts and partial payments are all supported out of the box.",
+    a: "Monthly, quarterly and annual plans, optional components, sibling discounts and partial payment records are supported. Online payment processing is not currently offered.",
   },
   {
     q: "How do we move from our current registers or Excel?",
